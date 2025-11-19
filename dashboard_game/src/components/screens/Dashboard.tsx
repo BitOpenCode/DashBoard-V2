@@ -35,6 +35,20 @@ ChartJS.register(
 const numberFormat = (value: number, fractionDigits = 2) =>
   new Intl.NumberFormat('ru-RU', { maximumFractionDigits: fractionDigits }).format(value);
 
+// Функция для полного отображения чисел (без округления)
+const formatFullNumber = (value: number | string): string => {
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return String(value);
+  
+  // Если число очень маленькое (< 0.0001), показываем все знаки
+  if (Math.abs(num) > 0 && Math.abs(num) < 0.0001) {
+    return num.toFixed(20).replace(/\.?0+$/, '');
+  }
+  
+  // Для обычных чисел показываем до 8 знаков после запятой
+  return num.toFixed(8).replace(/\.?0+$/, '');
+};
+
 const Dashboard: React.FC = () => {
   const { isDark } = useTheme();
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -184,6 +198,52 @@ const Dashboard: React.FC = () => {
     user: any;
     loading: boolean;
   } | null>(null);
+  const [userTransactions, setUserTransactions] = useState<{
+    all_transactions: any[];
+    transactions_by_type: any;
+    balance_history: any;
+    last_transaction: any;
+    total_orders: number;
+    total_points_spent: number;
+    total_ton_spent: number;
+    orders: any[];
+    assets_metadata: any;
+    loading: boolean;
+  } | null>(null);
+  const [transactionFilters, setTransactionFilters] = useState<{
+    type: string;
+    dateFrom: string;
+    dateTo: string;
+    amountMin: string;
+    amountMax: string;
+    direction: 'all' | 'income' | 'expense';
+  }>({
+    type: 'all',
+    dateFrom: '',
+    dateTo: '',
+    amountMin: '',
+    amountMax: '',
+    direction: 'all'
+  });
+  const [orderFilters, setOrderFilters] = useState<{
+    type: string;
+    status: string;
+    dateFrom: string;
+    dateTo: string;
+    pointsMin: string;
+    pointsMax: string;
+    tonMin: string;
+    tonMax: string;
+  }>({
+    type: 'all',
+    status: 'all',
+    dateFrom: '',
+    dateTo: '',
+    pointsMin: '',
+    pointsMax: '',
+    tonMin: '',
+    tonMax: ''
+  });
   const [allUsersFilters, setAllUsersFilters] = useState<{
     search: string;
     ecosPremium: 'all' | 'premium' | 'free';
@@ -1409,12 +1469,14 @@ const Dashboard: React.FC = () => {
         throw new Error(`Некорректный person_id: ${personId}`);
       }
       
+      // Используем webhook game-user-4kpi, который возвращает всех пользователей
       const webhookUrl = import.meta.env.DEV 
-        ? `/webhook/game-user-4kpi?person_id=${personIdNum}`
-        : `https://n8n-p.blc.am/webhook/game-user-4kpi?person_id=${personIdNum}`;
+        ? `/webhook/game-user-4kpi`
+        : `https://n8n-p.blc.am/webhook/game-user-4kpi`;
       
-      console.log('🔗 Загрузка деталей пользователя с:', webhookUrl);
+      console.log('🔗 Загрузка данных всех пользователей с webhook:', webhookUrl);
       
+      // Используем GET запрос (webhook возвращает всех пользователей)
       const response = await fetch(webhookUrl, {
         method: 'GET',
         headers: {
@@ -1429,92 +1491,98 @@ const Dashboard: React.FC = () => {
       }
       
       const data = await response.json();
-      console.log('📊 Полученные данные пользователя (RAW):', data);
-      console.log('📊 Полный JSON ответ:', JSON.stringify(data, null, 2));
+      console.log('📊 Полученные данные от webhook (RAW):', data);
+      console.log('📊 Полный JSON ответ (первые 5000 символов):', JSON.stringify(data, null, 2).substring(0, 5000));
       console.log('📊 Тип данных:', typeof data);
       console.log('📊 Является массивом:', Array.isArray(data));
-      console.log('🔍 Ищем пользователя с person_id:', personId);
       
-      // Обрабатываем разные форматы ответа
-      let userData = null;
+      // Webhook возвращает массив всех пользователей (как в final.json)
+      // Нужно найти нужного пользователя по person_id на фронте
       let allUsers: any[] = [];
       
       if (Array.isArray(data)) {
-        // Если это массив
-        console.log('📦 Данные - массив, длина:', data.length);
-        if (data.length > 0) {
-          const firstItem = data[0];
-          console.log('📦 Первый элемент массива:', firstItem);
-          // Проверяем, есть ли в нем users
-          if (firstItem && firstItem.users && Array.isArray(firstItem.users)) {
-            allUsers = firstItem.users;
-            console.log('✅ Извлечено users из первого элемента массива');
-          } else if (firstItem && (firstItem.person_id !== undefined || firstItem.id !== undefined || firstItem.user_id !== undefined)) {
-            // Если это массив пользователей
-            allUsers = data;
-            console.log('✅ Данные - массив пользователей');
-          } else {
-            // Если это массив объектов с users
-            allUsers = data.flatMap((item: any) => {
-              if (item && item.users && Array.isArray(item.users)) {
-                return item.users;
-              }
-              return item && (item.person_id !== undefined || item.id !== undefined || item.user_id !== undefined) ? [item] : [];
-            });
-            console.log('✅ Извлечено из массива объектов');
-          }
-        }
+        // Если это массив пользователей (основной случай)
+        allUsers = data;
+        console.log(`✅ Получен массив из ${allUsers.length} пользователей`);
       } else if (data && typeof data === 'object') {
-        // Если это объект
-        console.log('📦 Данные - объект, ключи:', Object.keys(data));
-        if (data.users && Array.isArray(data.users)) {
-          allUsers = data.users;
-          console.log('✅ Извлечено users из объекта');
-        } else if (data.json && data.json.users && Array.isArray(data.json.users)) {
-          allUsers = data.json.users;
-          console.log('✅ Извлечено json.users из объекта');
+        // Если это объект, пробуем найти массив внутри
+        console.log('📦 Данные - объект, все ключи:', Object.keys(data));
+        console.log('📦 Структура объекта:', Object.keys(data).map(key => ({
+          key,
+          type: typeof data[key],
+          isArray: Array.isArray(data[key]),
+          length: Array.isArray(data[key]) ? data[key].length : 'N/A'
+        })));
+        
+        // Проверяем все возможные поля, которые могут содержать массив
+        if (data.rows && Array.isArray(data.rows)) {
+          allUsers = data.rows;
+          console.log('✅ Извлечено rows из объекта, количество:', allUsers.length);
         } else if (data.result && Array.isArray(data.result)) {
           allUsers = data.result;
-          console.log('✅ Извлечено result из объекта');
-        } else if (data.rows && Array.isArray(data.rows)) {
-          allUsers = data.rows;
-          console.log('✅ Извлечено rows из объекта');
-        } else if (data.person_id !== undefined || data.id !== undefined || data.user_id !== undefined) {
-          // Если это сам объект пользователя
-          allUsers = [data];
-          console.log('✅ Данные - один объект пользователя');
+          console.log('✅ Извлечено result из объекта, количество:', allUsers.length);
+        } else if (data.users && Array.isArray(data.users)) {
+          allUsers = data.users;
+          console.log('✅ Извлечено users из объекта, количество:', allUsers.length);
+        } else if (data.data && Array.isArray(data.data)) {
+          allUsers = data.data;
+          console.log('✅ Извлечено data из объекта, количество:', allUsers.length);
         } else {
-          // Попробуем найти любые поля, которые могут содержать массив пользователей
+          // Пробуем найти любой массив в объекте
           for (const key in data) {
-            if (Array.isArray(data[key]) && data[key].length > 0) {
-              const firstItem = data[key][0];
-              if (firstItem && (firstItem.person_id !== undefined || firstItem.id !== undefined || firstItem.user_id !== undefined)) {
-                allUsers = data[key];
-                console.log(`✅ Найден массив пользователей в поле "${key}"`);
+            if (Array.isArray(data[key])) {
+              const arr = data[key];
+              // Проверяем, что это массив пользователей (есть person_id)
+              if (arr.length > 0 && (arr[0].person_id !== undefined || arr[0].id !== undefined)) {
+                allUsers = arr;
+                console.log(`✅ Найден массив пользователей в поле "${key}", количество:`, allUsers.length);
                 break;
               }
             }
           }
+          
+          // Если все еще не нашли массив
+          if (allUsers.length === 0) {
+            // Если это один объект пользователя - добавляем в массив
+            console.log('⚠️ Получен один объект вместо массива, добавляем в массив');
+            console.log('⚠️ Структура объекта:', {
+              keys: Object.keys(data),
+              person_id: data.person_id,
+              id: data.id,
+              sample_keys: Object.keys(data).slice(0, 10)
+            });
+            allUsers = [data];
+          }
         }
       }
       
-      console.log(`📊 Найдено ${allUsers.length} пользователей в ответе`);
-      if (allUsers.length > 0) {
-        console.log('📋 Первый пользователь:', allUsers[0]);
-        console.log('📋 Все person_id в ответе:', allUsers.map((u: any) => ({
-          person_id: u.person_id,
-          id: u.id,
-          user_id: u.user_id,
-          username: u.username || u.tg_username || u.name
-        })));
+      console.log(`📊 Всего получено ${allUsers.length} пользователей от webhook`);
+      
+      // Если webhook вернул мало пользователей, используем уже загруженные данные из allUsersData
+      // (которые загружаются через game-all-users и содержат всех пользователей)
+      let searchInUsers = allUsers;
+      
+      if (allUsers.length < 100) {
+        console.warn(`⚠️ Webhook вернул только ${allUsers.length} пользователей, это подозрительно мало`);
+        console.log('📋 ID пользователей от webhook:', allUsers.map((u: any) => {
+          const uid = u.person_id ?? u.id ?? u.user_id ?? u.personId ?? u.userId;
+          return uid !== undefined && uid !== null ? parseInt(String(uid)) : null;
+        }));
+        
+        // Пробуем использовать уже загруженные данные
+        if (allUsersData && allUsersData.users && Array.isArray(allUsersData.users) && allUsersData.users.length > 0) {
+          console.log(`✅ Используем уже загруженные данные из allUsersData (${allUsersData.users.length} пользователей)`);
+          searchInUsers = allUsersData.users;
+        } else {
+          console.warn('⚠️ allUsersData не загружены, используем данные от webhook');
+        }
       }
       
-      // Ищем пользователя с нужным person_id (пробуем разные поля)
-      // ВАЖНО: Сравниваем строго по id/person_id, который был запрошен
-      const requestedIdNum = parseInt(String(personId));
-      console.log(`🔍 Ищем пользователя с ID ${requestedIdNum} среди ${allUsers.length} пользователей`);
+      // Ищем пользователя с нужным person_id в массиве
+      const requestedIdNum = personIdNum;
+      console.log(`🔍 Ищем пользователя с ID ${requestedIdNum} среди ${searchInUsers.length} пользователей`);
       
-      userData = allUsers.find((user: any) => {
+      const userData = searchInUsers.find((user: any) => {
         // Пробуем все возможные поля для ID
         const userId = user.person_id ?? user.id ?? user.user_id ?? user.personId ?? user.userId;
         
@@ -1526,49 +1594,38 @@ const Dashboard: React.FC = () => {
         const userIdNum = parseInt(String(userId));
         const match = userIdNum === requestedIdNum;
         
-        console.log(`  🔎 Проверяем пользователя: userId=${userId} (${typeof userId}, parsed=${userIdNum}), requestedId=${requestedIdNum}, match=${match}`);
-        
         if (match) {
-          console.log('✅ Найден пользователь:', user.username || user.first_name || user.tg_username, 'с ID:', userId);
+          console.log('✅ Найден пользователь!', {
+            person_id: user.person_id,
+            id: user.id,
+            username: user.username || user.tg_username || user.first_name
+          });
         }
+        
         return match;
       });
       
-      // Если не нашли точного совпадения, но получили 1 пользователя - возможно webhook игнорирует параметр
-      // В этом случае показываем предупреждение, но все равно используем полученного пользователя
-      if (!userData && allUsers.length === 1) {
-        const singleUser = allUsers[0];
-        const userId = singleUser.person_id ?? singleUser.id ?? singleUser.user_id ?? singleUser.personId ?? singleUser.userId;
-        const userIdNum = userId !== undefined && userId !== null ? parseInt(String(userId)) : null;
-        
-        console.warn('⚠️ ВНИМАНИЕ: Webhook вернул пользователя с другим ID!');
-        console.warn(`  Запрошенный ID: ${requestedIdNum}`);
-        console.warn(`  Полученный ID: ${userIdNum}`);
-        console.warn(`  Это может означать, что webhook игнорирует параметр person_id или возвращает всегда одного пользователя`);
-        
-        // Используем полученного пользователя, но показываем предупреждение
-        userData = singleUser;
-        console.log('✅ Используем полученного пользователя (ID может не совпадать)');
-      }
-      
-      // Если все еще не нашли
+      // Если не нашли пользователя
       if (!userData) {
-        console.error('❌ Пользователь с точным ID не найден!');
+        console.error('❌ Пользователь с ID не найден в массиве!');
         console.log('📋 Запрошенный ID:', requestedIdNum, '(тип:', typeof requestedIdNum, ')');
-        console.log('📋 Все ID в ответе:', allUsers.map((u: any) => {
+        console.log('📋 Первые 20 ID в данных:', searchInUsers.slice(0, 20).map((u: any) => {
           const uid = u.person_id ?? u.id ?? u.user_id ?? u.personId ?? u.userId;
           return {
             person_id: u.person_id,
             id: u.id,
             user_id: u.user_id,
-            personId: u.personId,
-            userId: u.userId,
             parsed_id: uid !== undefined && uid !== null ? parseInt(String(uid)) : null,
-            username: u.username || u.tg_username || u.name
+            username: u.username || u.tg_username || u.first_name
           };
         }));
-        throw new Error(`Пользователь с ID ${requestedIdNum} не найден в ответе webhook. Получено ${allUsers.length} пользователей.`);
+        throw new Error(`Пользователь с ID ${requestedIdNum} не найден. Проверено ${searchInUsers.length} пользователей (${allUsers.length} от webhook, ${allUsersData?.users?.length || 0} из allUsersData).`);
       }
+      
+      console.log('✅ Найден пользователь:', {
+        person_id: userData.person_id,
+        username: userData.username || userData.tg_username || userData.first_name
+      });
       
       // Нормализуем данные пользователя (используем ту же функцию, что и для списка)
       const normalizedUser = normalizeUserData(userData);
@@ -1580,9 +1637,13 @@ const Dashboard: React.FC = () => {
       });
       
       setUserDetails({ user: normalizedUser, loading: false });
+      
+      // Загружаем детальные данные о транзакциях и заказах из отдельного webhook
+      await loadUserTransactions(personIdNum);
     } catch (e: any) {
       console.error('❌ Ошибка загрузки деталей пользователя:', e);
       setUserDetails(null);
+      setUserTransactions(null);
       
       let errorMessage = 'Неизвестная ошибка';
       if (e.message.includes('Failed to fetch')) {
@@ -1598,6 +1659,181 @@ const Dashboard: React.FC = () => {
       
       const fullErrorMessage = `Ошибка загрузки деталей пользователя: ${errorMessage}\n\nУбедитесь, что webhook "game-user-4kpi" активен в n8n.\n\nПроверьте консоль браузера для деталей.`;
       alert(fullErrorMessage);
+    }
+  };
+
+  // Загрузка детальных данных о транзакциях и заказах
+  const loadUserTransactions = async (personId: number) => {
+    console.log('🚀 loadUserTransactions вызвана для person_id:', personId);
+    setUserTransactions({ 
+      all_transactions: [],
+      transactions_by_type: {},
+      balance_history: {},
+      last_transaction: null,
+      total_orders: 0,
+      total_points_spent: 0,
+      total_ton_spent: 0,
+      orders: [],
+      assets_metadata: {},
+      loading: true 
+    });
+    
+    try {
+      const personIdNum = parseInt(String(personId));
+      if (isNaN(personIdNum)) {
+        throw new Error(`Некорректный person_id: ${personId}`);
+      }
+      
+      const webhookUrl = import.meta.env.DEV 
+        ? `/webhook/game-transactions?person_id=${personIdNum}`
+        : `https://n8n-p.blc.am/webhook/game-transactions?person_id=${personIdNum}`;
+      
+      console.log('🔗 Загрузка транзакций и заказов с:', webhookUrl);
+      
+      const response = await fetch(webhookUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('📊 Полученные данные транзакций:', data);
+      
+      // Обрабатываем ответ (может быть массив или объект)
+      let transactionsData = null;
+      if (Array.isArray(data) && data.length > 0) {
+        transactionsData = data[0];
+      } else if (data && typeof data === 'object') {
+        if (data.rows && Array.isArray(data.rows) && data.rows.length > 0) {
+          transactionsData = data.rows[0];
+        } else if (data.result && Array.isArray(data.result) && data.result.length > 0) {
+          transactionsData = data.result[0];
+        } else if (data.person_id !== undefined) {
+          transactionsData = data;
+        }
+      }
+      
+      if (!transactionsData) {
+        throw new Error('Не удалось извлечь данные транзакций из ответа webhook');
+      }
+      
+      // Обрабатываем all_transactions (может быть массивом или JSON строкой)
+      let allTransactions: any[] = [];
+      if (transactionsData.all_transactions) {
+        if (Array.isArray(transactionsData.all_transactions)) {
+          allTransactions = transactionsData.all_transactions;
+        } else if (typeof transactionsData.all_transactions === 'string') {
+          try {
+            allTransactions = JSON.parse(transactionsData.all_transactions);
+            if (!Array.isArray(allTransactions)) {
+              allTransactions = [];
+            }
+          } catch (e) {
+            console.warn('Ошибка парсинга all_transactions:', e);
+          }
+        }
+      }
+      
+      // Обрабатываем transactions_by_type
+      let transactionsByType: any = {};
+      if (transactionsData.transactions_by_type) {
+        if (typeof transactionsData.transactions_by_type === 'object' && !Array.isArray(transactionsData.transactions_by_type)) {
+          transactionsByType = transactionsData.transactions_by_type;
+        } else if (typeof transactionsData.transactions_by_type === 'string') {
+          try {
+            transactionsByType = JSON.parse(transactionsData.transactions_by_type);
+            if (Array.isArray(transactionsByType) || typeof transactionsByType !== 'object') {
+              transactionsByType = {};
+            }
+          } catch (e) {
+            console.warn('Ошибка парсинга transactions_by_type:', e);
+          }
+        }
+      }
+      
+      // Обрабатываем orders
+      let orders: any[] = [];
+      if (transactionsData.orders) {
+        if (Array.isArray(transactionsData.orders)) {
+          orders = transactionsData.orders;
+        } else if (typeof transactionsData.orders === 'string') {
+          try {
+            orders = JSON.parse(transactionsData.orders);
+            if (!Array.isArray(orders)) {
+              orders = [];
+            }
+          } catch (e) {
+            console.warn('Ошибка парсинга orders:', e);
+          }
+        }
+      }
+      
+      // Обрабатываем assets_metadata (заменяем ECOScoin на XP)
+      let assetsMetadata: any = {};
+      if (transactionsData.assets_metadata) {
+        if (typeof transactionsData.assets_metadata === 'object' && !Array.isArray(transactionsData.assets_metadata)) {
+          assetsMetadata = transactionsData.assets_metadata;
+          // Заменяем ECOScoin на XP
+          for (const assetId in assetsMetadata) {
+            if (assetsMetadata[assetId].name === 'ECOScoin') {
+              assetsMetadata[assetId].name = 'XP';
+            }
+          }
+        } else if (typeof transactionsData.assets_metadata === 'string') {
+          try {
+            assetsMetadata = JSON.parse(transactionsData.assets_metadata);
+            if (typeof assetsMetadata === 'object' && !Array.isArray(assetsMetadata)) {
+              for (const assetId in assetsMetadata) {
+                if (assetsMetadata[assetId].name === 'ECOScoin') {
+                  assetsMetadata[assetId].name = 'XP';
+                }
+              }
+            } else {
+              assetsMetadata = {};
+            }
+          } catch (e) {
+            console.warn('Ошибка парсинга assets_metadata:', e);
+          }
+        }
+      }
+      
+      setUserTransactions({
+        all_transactions: allTransactions,
+        transactions_by_type: transactionsByType,
+        balance_history: transactionsData.balance_history || {},
+        last_transaction: transactionsData.last_transaction || null,
+        total_orders: parseInt(String(transactionsData.total_orders || 0)),
+        total_points_spent: parseFloat(String(transactionsData.total_points_spent || 0)),
+        total_ton_spent: parseFloat(String(transactionsData.total_ton_spent || 0)),
+        orders: orders,
+        assets_metadata: assetsMetadata,
+        loading: false
+      });
+      
+      console.log('✅ Данные транзакций загружены:', {
+        transactions: allTransactions.length,
+        orders: orders.length,
+        types: Object.keys(transactionsByType).length
+      });
+    } catch (e: any) {
+      console.error('❌ Ошибка загрузки транзакций:', e);
+      setUserTransactions({
+        all_transactions: [],
+        transactions_by_type: {},
+        balance_history: {},
+        last_transaction: null,
+        total_orders: 0,
+        total_points_spent: 0,
+        total_ton_spent: 0,
+        orders: [],
+        assets_metadata: {},
+        loading: false
+      });
     }
   };
 
@@ -6206,7 +6442,28 @@ const Dashboard: React.FC = () => {
       {userDetails && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 pt-12 pb-32 overflow-y-auto"
-          onClick={() => setUserDetails(null)}
+          onClick={() => {
+            setUserDetails(null);
+            setUserTransactions(null);
+            setTransactionFilters({
+              type: 'all',
+              dateFrom: '',
+              dateTo: '',
+              amountMin: '',
+              amountMax: '',
+              direction: 'all'
+            });
+            setOrderFilters({
+              type: 'all',
+              status: 'all',
+              dateFrom: '',
+              dateTo: '',
+              pointsMin: '',
+              pointsMax: '',
+              tonMin: '',
+              tonMax: ''
+            });
+          }}
         >
           <div 
             className={`max-w-6xl w-full rounded-xl shadow-2xl p-6 mb-8 ${isDark ? 'bg-gray-800' : 'bg-white'}`}
@@ -6228,7 +6485,18 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
               <button
-                onClick={() => setUserDetails(null)}
+                onClick={() => {
+                  setUserDetails(null);
+                  setUserTransactions(null);
+                  setTransactionFilters({
+                    type: 'all',
+                    dateFrom: '',
+                    dateTo: '',
+                    amountMin: '',
+                    amountMax: '',
+                    direction: 'all'
+                  });
+                }}
                 className={`p-2 rounded-lg transition-colors ${
                   isDark 
                     ? 'hover:bg-gray-700 text-gray-300' 
@@ -6530,58 +6798,711 @@ const Dashboard: React.FC = () => {
                 })()}
 
                 {/* Заказы */}
-                {userDetails.user.total_orders !== undefined && (
+                {userTransactions && (
                   <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                    <h4 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Заказы</h4>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Всего заказов</p>
-                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{userDetails.user.total_orders || 0}</p>
+                    <h4 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+                      Заказы
+                      {userTransactions.loading && <span className="ml-2 text-sm text-gray-500">(загрузка...)</span>}
+                    </h4>
+                    {userTransactions.loading ? (
+                      <div className="text-center py-4">
+                        <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Загрузка данных о заказах...</p>
                       </div>
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Потрачено Points</p>
-                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{numberFormat(userDetails.user.total_points_spent || 0)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Потрачено TON</p>
-                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{numberFormat(userDetails.user.total_ton_spent || 0)}</p>
-                      </div>
-                    </div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-3 gap-4 mb-4">
+                          <div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Всего заказов</p>
+                            <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{userTransactions.total_orders || 0}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Потрачено Points</p>
+                            <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{numberFormat(userTransactions.total_points_spent || 0)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Потрачено TON</p>
+                            <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{numberFormat(userTransactions.total_ton_spent || 0)}</p>
+                          </div>
+                        </div>
+                        {/* Фильтры заказов */}
+                        {userTransactions.orders && userTransactions.orders.length > 0 && (
+                          <div className={`mt-4 p-3 rounded-lg ${isDark ? 'bg-gray-600' : 'bg-white border border-gray-200'}`}>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Фильтры заказов:</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                              {/* Фильтр по типу */}
+                              <div>
+                                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Тип
+                                </label>
+                                <select
+                                  value={orderFilters.type}
+                                  onChange={(e) => setOrderFilters({ ...orderFilters, type: e.target.value })}
+                                  className={`w-full px-2 py-1 text-sm rounded border ${
+                                    isDark 
+                                      ? 'bg-gray-700 border-gray-600 text-gray-200' 
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                >
+                                  <option value="all">Все типы</option>
+                                  <option value="asic">ASIC</option>
+                                  <option value="energy">Energy</option>
+                                  <option value="land">Land</option>
+                                  <option value="energystation">Energy Station</option>
+                                  <option value="datacenter">Data Center</option>
+                                </select>
+                              </div>
+
+                              {/* Фильтр по статусу */}
+                              <div>
+                                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Статус
+                                </label>
+                                <select
+                                  value={orderFilters.status}
+                                  onChange={(e) => setOrderFilters({ ...orderFilters, status: e.target.value })}
+                                  className={`w-full px-2 py-1 text-sm rounded border ${
+                                    isDark 
+                                      ? 'bg-gray-700 border-gray-600 text-gray-200' 
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                >
+                                  <option value="all">Все статусы</option>
+                                  <option value="completed">Завершенные</option>
+                                  <option value="pending">Ожидающие</option>
+                                  <option value="cancelled">Отмененные</option>
+                                  <option value="failed">Неудачные</option>
+                                </select>
+                              </div>
+
+                              {/* Фильтр по дате от */}
+                              <div>
+                                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Дата от
+                                </label>
+                                <input
+                                  type="date"
+                                  value={orderFilters.dateFrom}
+                                  onChange={(e) => setOrderFilters({ ...orderFilters, dateFrom: e.target.value })}
+                                  className={`w-full px-2 py-1 text-sm rounded border ${
+                                    isDark 
+                                      ? 'bg-gray-700 border-gray-600 text-gray-200' 
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                />
+                              </div>
+
+                              {/* Фильтр по дате до */}
+                              <div>
+                                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Дата до
+                                </label>
+                                <input
+                                  type="date"
+                                  value={orderFilters.dateTo}
+                                  onChange={(e) => setOrderFilters({ ...orderFilters, dateTo: e.target.value })}
+                                  className={`w-full px-2 py-1 text-sm rounded border ${
+                                    isDark 
+                                      ? 'bg-gray-700 border-gray-600 text-gray-200' 
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                />
+                              </div>
+
+                              {/* Кнопка сброса фильтров */}
+                              <div className="flex items-end">
+                                <button
+                                  onClick={() => setOrderFilters({
+                                    type: 'all',
+                                    status: 'all',
+                                    dateFrom: '',
+                                    dateTo: '',
+                                    pointsMin: '',
+                                    pointsMax: '',
+                                    tonMin: '',
+                                    tonMax: ''
+                                  })}
+                                  className={`w-full px-3 py-1 text-sm rounded ${
+                                    isDark 
+                                      ? 'bg-gray-600 hover:bg-gray-500 text-gray-200' 
+                                      : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                                  } transition-colors`}
+                                >
+                                  Сбросить
+                                </button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+                              {/* Фильтр по минимальному количеству Points */}
+                              <div>
+                                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Points мин.
+                                </label>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  value={orderFilters.pointsMin}
+                                  onChange={(e) => setOrderFilters({ ...orderFilters, pointsMin: e.target.value })}
+                                  placeholder="0"
+                                  className={`w-full px-2 py-1 text-sm rounded border font-mono ${
+                                    isDark 
+                                      ? 'bg-gray-700 border-gray-600 text-gray-200' 
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                />
+                              </div>
+
+                              {/* Фильтр по максимальному количеству Points */}
+                              <div>
+                                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Points макс.
+                                </label>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  value={orderFilters.pointsMax}
+                                  onChange={(e) => setOrderFilters({ ...orderFilters, pointsMax: e.target.value })}
+                                  placeholder="∞"
+                                  className={`w-full px-2 py-1 text-sm rounded border font-mono ${
+                                    isDark 
+                                      ? 'bg-gray-700 border-gray-600 text-gray-200' 
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                />
+                              </div>
+
+                              {/* Фильтр по минимальному количеству TON */}
+                              <div>
+                                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  TON мин.
+                                </label>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  value={orderFilters.tonMin}
+                                  onChange={(e) => setOrderFilters({ ...orderFilters, tonMin: e.target.value })}
+                                  placeholder="0"
+                                  className={`w-full px-2 py-1 text-sm rounded border font-mono ${
+                                    isDark 
+                                      ? 'bg-gray-700 border-gray-600 text-gray-200' 
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                />
+                              </div>
+
+                              {/* Фильтр по максимальному количеству TON */}
+                              <div>
+                                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  TON макс.
+                                </label>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  value={orderFilters.tonMax}
+                                  onChange={(e) => setOrderFilters({ ...orderFilters, tonMax: e.target.value })}
+                                  placeholder="∞"
+                                  className={`w-full px-2 py-1 text-sm rounded border font-mono ${
+                                    isDark 
+                                      ? 'bg-gray-700 border-gray-600 text-gray-200' 
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Список заказов */}
+                        {(() => {
+                          if (!userTransactions.orders || userTransactions.orders.length === 0) {
+                            return null;
+                          }
+
+                          // Применяем фильтры
+                          let filteredOrders = userTransactions.orders;
+
+                          // Фильтр по типу (проверяем item_code на наличие типа)
+                          if (orderFilters.type !== 'all') {
+                            filteredOrders = filteredOrders.filter((order: any) => {
+                              const itemCode = String(order.item_code || '').toLowerCase();
+                              let filterType = orderFilters.type.toLowerCase();
+                              
+                              // Специальная обработка для "energystation" - ищем energy_station или energystation
+                              if (filterType === 'energystation') {
+                                // Ищем energy_station (с подчеркиванием) или energystation (без подчеркивания)
+                                return itemCode.includes('energy_station') || itemCode.includes('energystation');
+                              }
+                              
+                              // Для остальных типов проверяем точное совпадение или вхождение
+                              // Проверяем, содержит ли item_code указанный тип
+                              return itemCode.includes(filterType);
+                            });
+                          }
+
+                          // Фильтр по статусу
+                          if (orderFilters.status !== 'all') {
+                            filteredOrders = filteredOrders.filter((order: any) => 
+                              (order.status || 'pending') === orderFilters.status
+                            );
+                          }
+
+                          // Фильтр по дате от
+                          if (orderFilters.dateFrom) {
+                            const dateFrom = new Date(orderFilters.dateFrom);
+                            dateFrom.setHours(0, 0, 0, 0);
+                            filteredOrders = filteredOrders.filter((order: any) => {
+                              if (!order.created_at) return false;
+                              const orderDate = new Date(order.created_at);
+                              return orderDate >= dateFrom;
+                            });
+                          }
+
+                          // Фильтр по дате до
+                          if (orderFilters.dateTo) {
+                            const dateTo = new Date(orderFilters.dateTo);
+                            dateTo.setHours(23, 59, 59, 999);
+                            filteredOrders = filteredOrders.filter((order: any) => {
+                              if (!order.created_at) return false;
+                              const orderDate = new Date(order.created_at);
+                              return orderDate <= dateTo;
+                            });
+                          }
+
+                          // Фильтр по минимальному количеству Points
+                          if (orderFilters.pointsMin) {
+                            const minPoints = parseFloat(orderFilters.pointsMin);
+                            if (!isNaN(minPoints)) {
+                              filteredOrders = filteredOrders.filter((order: any) => {
+                                const points = parseFloat(String(order.amount_points || 0));
+                                return points >= minPoints;
+                              });
+                            }
+                          }
+
+                          // Фильтр по максимальному количеству Points
+                          if (orderFilters.pointsMax) {
+                            const maxPoints = parseFloat(orderFilters.pointsMax);
+                            if (!isNaN(maxPoints)) {
+                              filteredOrders = filteredOrders.filter((order: any) => {
+                                const points = parseFloat(String(order.amount_points || 0));
+                                return points <= maxPoints;
+                              });
+                            }
+                          }
+
+                          // Фильтр по минимальному количеству TON
+                          if (orderFilters.tonMin) {
+                            const minTon = parseFloat(orderFilters.tonMin);
+                            if (!isNaN(minTon)) {
+                              filteredOrders = filteredOrders.filter((order: any) => {
+                                const ton = parseFloat(String(order.amount_ton || 0));
+                                return ton >= minTon;
+                              });
+                            }
+                          }
+
+                          // Фильтр по максимальному количеству TON
+                          if (orderFilters.tonMax) {
+                            const maxTon = parseFloat(orderFilters.tonMax);
+                            if (!isNaN(maxTon)) {
+                              filteredOrders = filteredOrders.filter((order: any) => {
+                                const ton = parseFloat(String(order.amount_ton || 0));
+                                return ton <= maxTon;
+                              });
+                            }
+                          }
+
+                          return (
+                            <div className="mt-4">
+                              <div className="mb-2 flex items-center justify-between">
+                                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                  Показано: {filteredOrders.length} из {userTransactions.orders.length} заказов
+                                </p>
+                              </div>
+                              <div className="space-y-2 max-h-96 overflow-y-auto">
+                                {filteredOrders.map((order: any, idx: number) => (
+                                  <div key={idx} className={`p-3 rounded border ${isDark ? 'bg-gray-600 border-gray-500' : 'bg-white border-gray-200'}`}>
+                                    <div className="flex justify-between items-start">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <span className={`text-sm font-semibold ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
+                                            {order.item_code || `Заказ #${order.order_id || idx + 1}`}
+                                          </span>
+                                          <span className={`text-xs px-2 py-0.5 rounded ${
+                                            order.status === 'completed' 
+                                              ? 'bg-green-500/20 text-green-600' 
+                                              : order.status === 'cancelled' || order.status === 'failed'
+                                              ? 'bg-red-500/20 text-red-600'
+                                              : 'bg-yellow-500/20 text-yellow-600'
+                                          }`}>
+                                            {order.status || 'pending'}
+                                          </span>
+                                        </div>
+                                        <div className="flex gap-4 mt-2 text-xs">
+                                          {order.amount_points > 0 && (
+                                            <span className={`font-mono ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                              Points: {formatFullNumber(order.amount_points)}
+                                            </span>
+                                          )}
+                                          {order.amount_ton > 0 && (
+                                            <span className={`font-mono ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                              TON: {formatFullNumber(order.amount_ton)}
+                                            </span>
+                                          )}
+                                        </div>
+                                        {order.metadata && typeof order.metadata === 'object' && Object.keys(order.metadata).length > 0 && (
+                                          <details className="mt-2">
+                                            <summary className={`text-xs cursor-pointer ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                              Метаданные
+                                            </summary>
+                                            <pre className={`text-xs mt-1 p-2 rounded ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-800'}`}>
+                                              {JSON.stringify(order.metadata, null, 2)}
+                                            </pre>
+                                          </details>
+                                        )}
+                                      </div>
+                                      <div className="text-right ml-4">
+                                        <span className={`text-xs block ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                          {order.created_at 
+                                            ? new Date(order.created_at).toLocaleDateString('ru-RU', {
+                                                day: '2-digit',
+                                                month: '2-digit',
+                                                year: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                                second: '2-digit'
+                                              })
+                                            : 'N/A'}
+                                        </span>
+                                        {order.order_id && (
+                                          <span className={`text-xs block mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                            ID: {order.order_id}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </>
+                    )}
                   </div>
                 )}
 
-                {/* Последняя транзакция */}
-                {userDetails.user.last_transaction && (
+                {/* Все транзакции */}
+                {userTransactions && (
                   <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-                    <h4 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Последняя транзакция</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Тип</p>
-                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{userDetails.user.last_transaction.operation_type || 'N/A'}</p>
+                    <h4 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+                      Все транзакции
+                      {userTransactions.loading && <span className="ml-2 text-sm text-gray-500">(загрузка...)</span>}
+                    </h4>
+                    {userTransactions.loading ? (
+                      <div className="text-center py-4">
+                        <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Загрузка транзакций...</p>
                       </div>
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Значение</p>
-                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{numberFormat(userDetails.user.last_transaction.value || 0)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Дата</p>
-                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>
-                          {userDetails.user.last_transaction.created_at 
-                            ? new Date(userDetails.user.last_transaction.created_at).toLocaleDateString('ru-RU', {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })
-                            : 'N/A'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Asset ID</p>
-                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{userDetails.user.last_transaction.asset_id || 'N/A'}</p>
-                      </div>
-                    </div>
+                    ) : (
+                      <>
+                        {/* Фильтры транзакций */}
+                        {userTransactions.all_transactions && userTransactions.all_transactions.length > 0 && (
+                          <div className={`mb-4 p-3 rounded-lg ${isDark ? 'bg-gray-600' : 'bg-white border border-gray-200'}`}>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {/* Фильтр по типу транзакции */}
+                              <div>
+                                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Тип транзакции
+                                </label>
+                                <select
+                                  value={transactionFilters.type}
+                                  onChange={(e) => setTransactionFilters({ ...transactionFilters, type: e.target.value })}
+                                  className={`w-full px-2 py-1 text-sm rounded border ${
+                                    isDark 
+                                      ? 'bg-gray-700 border-gray-600 text-gray-200' 
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                >
+                                  <option value="all">Все типы</option>
+                                  {userTransactions.transactions_by_type && Object.keys(userTransactions.transactions_by_type).map((type) => (
+                                    <option key={type} value={type}>{type}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* Фильтр по направлению (поступления/траты) */}
+                              <div>
+                                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Направление
+                                </label>
+                                <select
+                                  value={transactionFilters.direction}
+                                  onChange={(e) => setTransactionFilters({ ...transactionFilters, direction: e.target.value as 'all' | 'income' | 'expense' })}
+                                  className={`w-full px-2 py-1 text-sm rounded border ${
+                                    isDark 
+                                      ? 'bg-gray-700 border-gray-600 text-gray-200' 
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                >
+                                  <option value="all">Все</option>
+                                  <option value="income">Поступления (+)</option>
+                                  <option value="expense">Траты (-)</option>
+                                </select>
+                              </div>
+
+                              {/* Фильтр по дате от */}
+                              <div>
+                                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Дата от
+                                </label>
+                                <input
+                                  type="date"
+                                  value={transactionFilters.dateFrom}
+                                  onChange={(e) => setTransactionFilters({ ...transactionFilters, dateFrom: e.target.value })}
+                                  className={`w-full px-2 py-1 text-sm rounded border ${
+                                    isDark 
+                                      ? 'bg-gray-700 border-gray-600 text-gray-200' 
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                />
+                              </div>
+
+                              {/* Фильтр по дате до */}
+                              <div>
+                                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Дата до
+                                </label>
+                                <input
+                                  type="date"
+                                  value={transactionFilters.dateTo}
+                                  onChange={(e) => setTransactionFilters({ ...transactionFilters, dateTo: e.target.value })}
+                                  className={`w-full px-2 py-1 text-sm rounded border ${
+                                    isDark 
+                                      ? 'bg-gray-700 border-gray-600 text-gray-200' 
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                />
+                              </div>
+
+                              {/* Фильтр по минимальному объему */}
+                              <div>
+                                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Мин. объем
+                                </label>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  value={transactionFilters.amountMin}
+                                  onChange={(e) => setTransactionFilters({ ...transactionFilters, amountMin: e.target.value })}
+                                  placeholder="0"
+                                  className={`w-full px-2 py-1 text-sm rounded border ${
+                                    isDark 
+                                      ? 'bg-gray-700 border-gray-600 text-gray-200' 
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                />
+                              </div>
+
+                              {/* Фильтр по максимальному объему */}
+                              <div>
+                                <label className={`block text-xs mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  Макс. объем
+                                </label>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  value={transactionFilters.amountMax}
+                                  onChange={(e) => setTransactionFilters({ ...transactionFilters, amountMax: e.target.value })}
+                                  placeholder="∞"
+                                  className={`w-full px-2 py-1 text-sm rounded border ${
+                                    isDark 
+                                      ? 'bg-gray-700 border-gray-600 text-gray-200' 
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                />
+                              </div>
+
+                              {/* Кнопка сброса фильтров */}
+                              <div className="flex items-end">
+                                <button
+                                  onClick={() => setTransactionFilters({
+                                    type: 'all',
+                                    dateFrom: '',
+                                    dateTo: '',
+                                    amountMin: '',
+                                    amountMax: '',
+                                    direction: 'all'
+                                  })}
+                                  className={`w-full px-3 py-1 text-sm rounded ${
+                                    isDark 
+                                      ? 'bg-gray-600 hover:bg-gray-500 text-gray-200' 
+                                      : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                                  } transition-colors`}
+                                >
+                                  Сбросить
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Отфильтрованные транзакции */}
+                        {(() => {
+                          if (!userTransactions.all_transactions || userTransactions.all_transactions.length === 0) {
+                            return (
+                              <div className="text-center py-4">
+                                <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  Нет транзакций
+                                </p>
+                              </div>
+                            );
+                          }
+
+                          // Применяем фильтры
+                          let filteredTransactions = userTransactions.all_transactions;
+
+                          // Фильтр по типу
+                          if (transactionFilters.type !== 'all') {
+                            filteredTransactions = filteredTransactions.filter((t: any) => 
+                              t.operation_type === transactionFilters.type
+                            );
+                          }
+
+                          // Фильтр по направлению
+                          if (transactionFilters.direction === 'income') {
+                            filteredTransactions = filteredTransactions.filter((t: any) => 
+                              parseFloat(String(t.operation_value || 0)) > 0
+                            );
+                          } else if (transactionFilters.direction === 'expense') {
+                            filteredTransactions = filteredTransactions.filter((t: any) => 
+                              parseFloat(String(t.operation_value || 0)) < 0
+                            );
+                          }
+
+                          // Фильтр по дате от
+                          if (transactionFilters.dateFrom) {
+                            const dateFrom = new Date(transactionFilters.dateFrom);
+                            dateFrom.setHours(0, 0, 0, 0);
+                            filteredTransactions = filteredTransactions.filter((t: any) => {
+                              if (!t.created_at) return false;
+                              const txDate = new Date(t.created_at);
+                              return txDate >= dateFrom;
+                            });
+                          }
+
+                          // Фильтр по дате до
+                          if (transactionFilters.dateTo) {
+                            const dateTo = new Date(transactionFilters.dateTo);
+                            dateTo.setHours(23, 59, 59, 999);
+                            filteredTransactions = filteredTransactions.filter((t: any) => {
+                              if (!t.created_at) return false;
+                              const txDate = new Date(t.created_at);
+                              return txDate <= dateTo;
+                            });
+                          }
+
+                          // Фильтр по минимальному объему
+                          if (transactionFilters.amountMin) {
+                            const minAmount = parseFloat(transactionFilters.amountMin);
+                            if (!isNaN(minAmount)) {
+                              filteredTransactions = filteredTransactions.filter((t: any) => {
+                                const txAmount = Math.abs(parseFloat(String(t.operation_value || 0)));
+                                return txAmount >= minAmount;
+                              });
+                            }
+                          }
+
+                          // Фильтр по максимальному объему
+                          if (transactionFilters.amountMax) {
+                            const maxAmount = parseFloat(transactionFilters.amountMax);
+                            if (!isNaN(maxAmount)) {
+                              filteredTransactions = filteredTransactions.filter((t: any) => {
+                                const txAmount = Math.abs(parseFloat(String(t.operation_value || 0)));
+                                return txAmount <= maxAmount;
+                              });
+                            }
+                          }
+
+                          return (
+                            <>
+                              <div className="mb-2 flex items-center justify-between">
+                                <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                  Показано: {filteredTransactions.length} из {userTransactions.all_transactions.length} транзакций
+                                </p>
+                              </div>
+                              <div className="space-y-2 max-h-96 overflow-y-auto">
+                                {filteredTransactions.map((transaction: any, idx: number) => {
+                                  const assetName = userTransactions.assets_metadata?.[transaction.asset_id]?.name || `Asset ${transaction.asset_id}`;
+                                  const operationValue = parseFloat(String(transaction.operation_value || 0));
+                                  const isPositive = operationValue > 0;
+                                  const absValue = Math.abs(operationValue);
+                                  
+                                  return (
+                                    <div key={idx} className={`p-3 rounded border ${isDark ? 'bg-gray-600 border-gray-500' : 'bg-white border-gray-200'}`}>
+                                      <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2 mb-1">
+                                            <span className={`text-sm font-semibold font-mono ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                              {isPositive ? '+' : ''}{formatFullNumber(absValue)}
+                                            </span>
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">{assetName}</span>
+                                          </div>
+                                          <p className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                            {transaction.operation_type || 'N/A'}
+                                          </p>
+                                          {transaction.operation_id && (
+                                            <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                              ID операции: {transaction.operation_id}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <div className="text-right ml-4">
+                                          <span className={`text-xs block ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                            {transaction.created_at 
+                                              ? new Date(transaction.created_at).toLocaleDateString('ru-RU', {
+                                                  day: '2-digit',
+                                                  month: '2-digit',
+                                                  year: 'numeric',
+                                                  hour: '2-digit',
+                                                  minute: '2-digit',
+                                                  second: '2-digit'
+                                                })
+                                              : 'N/A'}
+                                          </span>
+                                          {transaction.id && (
+                                            <span className={`text-xs block mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                              ID: {transaction.id}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </>
+                          );
+                        })()}
+                        
+                        {/* Статистика по типам транзакций */}
+                        {userTransactions.transactions_by_type && Object.keys(userTransactions.transactions_by_type).length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Статистика по типам:</p>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                              {Object.entries(userTransactions.transactions_by_type).slice(0, 9).map(([type, stats]: [string, any]) => (
+                                <div key={type} className={`p-2 rounded ${isDark ? 'bg-gray-600' : 'bg-white'}`}>
+                                  <p className={`text-xs font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    {type}
+                                  </p>
+                                  <p className={`text-xs font-mono ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    {stats.count || 0} шт. / {formatFullNumber(stats.total_value || 0)}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 )}
 
