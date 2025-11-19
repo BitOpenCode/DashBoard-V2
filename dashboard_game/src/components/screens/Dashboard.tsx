@@ -38,7 +38,7 @@ const numberFormat = (value: number, fractionDigits = 2) =>
 const Dashboard: React.FC = () => {
   const { isDark } = useTheme();
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false); // Установлено в false, так как dashboard-stats не используется
   const [error, setError] = useState<string | null>(null);
   const [usersData, setUsersData] = useState<{
     totalUsers: number;
@@ -141,6 +141,83 @@ const Dashboard: React.FC = () => {
     }>;
   } | null>(null);
   const [poolsLoading, setPoolsLoading] = useState<boolean>(false);
+  const [kpiData, setKpiData] = useState<{
+    level_stats: Array<{
+      level: number;
+      users_per_level: number;
+      percentage: string;
+    }>;
+    total_users: number;
+  } | null>(null);
+  const [kpiLoading, setKpiLoading] = useState<boolean>(false);
+  const [selectedKpiLevel, setSelectedKpiLevel] = useState<number | null>(null);
+  const [allUsersData, setAllUsersData] = useState<{
+    users: Array<{
+      person_id: number;
+      person_language: string;
+      wallet_address: string;
+      hex_wallet_address: string;
+      is_ecos_premium: boolean;
+      ecos_premium_until: string | null;
+      onbording_done: boolean;
+      person_created_at: string;
+      person_updated_at: string;
+      tg_id: string;
+      first_name: string;
+      last_name: string;
+      username: string;
+      tg_language: string;
+      tg_premium: boolean;
+      photo_url: string | null;
+      tg_created_at: string;
+      tg_updated_at: string;
+      total_asics: number;
+      total_th: number;
+      level: number | null;
+      effective_ths: number;
+      progress_cached: number;
+    }>;
+    total: number;
+  } | null>(null);
+  const [allUsersLoading, setAllUsersLoading] = useState<boolean>(false);
+  const [userDetails, setUserDetails] = useState<{
+    user: any;
+    loading: boolean;
+  } | null>(null);
+  const [allUsersFilters, setAllUsersFilters] = useState<{
+    search: string;
+    ecosPremium: 'all' | 'premium' | 'free';
+    tgPremium: 'all' | 'premium' | 'free';
+    onboarding: 'all' | 'done' | 'pending';
+    language: 'all' | string;
+    level: 'all' | string;
+    minAsic: string;
+    maxAsic: string;
+    minTh: string;
+    maxTh: string;
+    dateFrom: string;
+    dateTo: string;
+  }>({
+    search: '',
+    ecosPremium: 'all',
+    tgPremium: 'all',
+    onboarding: 'all',
+    language: 'all',
+    level: 'all',
+    minAsic: '',
+    maxAsic: '',
+    minTh: '',
+    maxTh: '',
+    dateFrom: '',
+    dateTo: ''
+  });
+  const [allUsersSort, setAllUsersSort] = useState<{
+    field: string | null;
+    direction: 'asc' | 'desc';
+  }>({
+    field: null,
+    direction: 'asc'
+  });
   const [levelUsersModal, setLevelUsersModal] = useState<{
     level: number;
     users: Array<{
@@ -177,7 +254,10 @@ const Dashboard: React.FC = () => {
       const data = await fetchDashboardStats();
       setStats(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
+      // Игнорируем ошибки загрузки dashboard-stats, так как этот webhook может быть неактивен
+      console.warn('⚠️ Не удалось загрузить dashboard-stats (webhook может быть неактивен):', e);
+      // Не устанавливаем ошибку, чтобы не показывать её пользователю
+      // setError(e instanceof Error ? e.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
@@ -194,6 +274,8 @@ const Dashboard: React.FC = () => {
     setFunnelData(null);
     setLeadersData(null);
     setPoolsData(null);
+    setKpiData(null);
+    setAllUsersData(null);
     
     try {
       // Используем относительный путь для прокси (на production будет полный URL)
@@ -329,6 +411,8 @@ const Dashboard: React.FC = () => {
     setFunnelData(null);
     setLeadersData(null);
     setPoolsData(null);
+    setKpiData(null);
+    setAllUsersData(null);
     
     try {
       const webhookUrl = import.meta.env.DEV 
@@ -398,6 +482,8 @@ const Dashboard: React.FC = () => {
     setFunnelData(null);
     setLeadersData(null);
     setPoolsData(null);
+    setKpiData(null);
+    setAllUsersData(null);
     
     try {
       const webhookUrl = import.meta.env.DEV 
@@ -468,6 +554,8 @@ const Dashboard: React.FC = () => {
     setFunnelData(null);
     setLeadersData(null);
     setPoolsData(null);
+    setKpiData(null);
+    setAllUsersData(null);
     
     try {
       const webhookUrl = import.meta.env.DEV 
@@ -575,6 +663,8 @@ const Dashboard: React.FC = () => {
     setWalletUsers(null);
     setLeadersData(null);
     setPoolsData(null);
+    setKpiData(null);
+    setAllUsersData(null);
     
     try {
       const webhookUrl = import.meta.env.DEV 
@@ -688,6 +778,8 @@ const Dashboard: React.FC = () => {
     setWalletUsers(null);
     setFunnelData(null);
     setPoolsData(null);
+    setKpiData(null);
+    setAllUsersData(null);
     
     try {
       const webhookUrl = import.meta.env.DEV 
@@ -781,6 +873,8 @@ const Dashboard: React.FC = () => {
     setWalletUsers(null);
     setFunnelData(null);
     setLeadersData(null);
+    setKpiData(null);
+    setAllUsersData(null);
     
     try {
       const webhookUrl = import.meta.env.DEV 
@@ -870,6 +964,640 @@ const Dashboard: React.FC = () => {
       alert(fullErrorMessage);
     } finally {
       setPoolsLoading(false);
+    }
+  };
+
+  const loadKpiData = async () => {
+    console.log('🚀 loadKpiData вызвана');
+    setKpiLoading(true);
+    
+    // Скрываем остальную статистику
+    setUsersData(null);
+    setWalletsData(null);
+    setEventsData(null);
+    setReferralsData(null);
+    setWalletUsers(null);
+    setFunnelData(null);
+    setLeadersData(null);
+    setPoolsData(null);
+    setKpiData(null); // Сбрасываем предыдущие данные
+    
+    try {
+      const webhookUrl = import.meta.env.DEV 
+        ? '/webhook/game-funnel-kpi'
+        : 'https://n8n-p.blc.am/webhook/game-funnel-kpi';
+      
+      console.log('🔗 Загрузка KPI данных с:', webhookUrl);
+      console.log('🔗 Режим:', import.meta.env.DEV ? 'DEV' : 'PROD');
+      
+      const response = await fetch(webhookUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('📡 Response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Response error:', errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}\n${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('📊 Полученные KPI данные (RAW):', data);
+      console.log('📊 Тип данных:', typeof data);
+      console.log('📊 Является массивом:', Array.isArray(data));
+      
+      // Обрабатываем данные от webhook
+      // Ожидаем формат: { level_stats: [...], total_users: ... } или [{ level_stats: [...], total_users: ... }]
+      let processedData;
+      if (Array.isArray(data) && data.length > 0) {
+        // Если это массив, берем первый элемент
+        processedData = data[0];
+        console.log('✅ Данные - массив, извлекаем первый элемент:', processedData);
+      } else if (data && typeof data === 'object') {
+        // Если это объект
+        if (data.level_stats) {
+          processedData = data;
+          console.log('✅ Данные - объект с level_stats');
+        } else if (data.json && data.json.level_stats) {
+          // Если данные обернуты в { json: {...} }
+          processedData = data.json;
+          console.log('✅ Данные - объект с json.level_stats');
+        } else {
+          console.error('❌ Неизвестный формат данных:', data);
+          throw new Error('Неверный формат данных от webhook. Ожидается объект с level_stats и total_users.');
+        }
+      } else {
+        console.error('❌ Неизвестный формат данных:', data);
+        throw new Error('Неверный формат данных от webhook. Ожидается объект с level_stats и total_users.');
+      }
+      
+      console.log('📊 Обработанные данные перед нормализацией:', processedData);
+      
+      // Проверяем наличие необходимых полей
+      if (!processedData.level_stats || !Array.isArray(processedData.level_stats)) {
+        console.error('❌ Отсутствует level_stats или он не массив:', processedData);
+        throw new Error('Неверный формат данных: отсутствует level_stats или он не является массивом.');
+      }
+      
+      // Нормализуем данные
+      const normalizedData = {
+        level_stats: processedData.level_stats.map((stat: any) => ({
+          level: parseInt(stat.level) || 0,
+          users_per_level: parseInt(stat.users_per_level) || 0,
+          percentage: parseFloat(stat.percentage || 0).toFixed(2)
+        })),
+        total_users: parseInt(processedData.total_users) || 0
+      };
+      
+      console.log('📊 Обработанные KPI данные (нормализованные):', normalizedData);
+      console.log('📊 Количество уровней:', normalizedData.level_stats.length);
+      setKpiData(normalizedData);
+      console.log('✅ KPI данные установлены в состояние');
+      
+    } catch (e: any) {
+      console.error('❌ Ошибка при загрузке KPI данных:', e);
+      console.error('❌ Stack:', e.stack);
+      
+      let errorMessage = 'Неизвестная ошибка';
+      if (e.message.includes('Failed to fetch')) {
+        errorMessage = 'Failed to fetch. Возможные причины:\n' +
+          '1. CORS-ошибка (проверьте настройки n8n)\n' +
+          '2. Webhook неактивен\n' +
+          '3. Проблемы с сетью';
+      } else if (e.message.includes('NetworkError')) {
+        errorMessage = 'Ошибка сети. Проверьте подключение к интернету.';
+      } else {
+        errorMessage = e.message;
+      }
+      
+      const fullErrorMessage = `Ошибка загрузки KPI данных: ${errorMessage}\n\nУбедитесь, что webhook "game-funnel-kpi" активен в n8n.\n\nПроверьте консоль браузера для деталей.`;
+      alert(fullErrorMessage);
+    } finally {
+      setKpiLoading(false);
+      console.log('🏁 loadKpiData завершена');
+    }
+  };
+
+  // Функция для нормализации данных пользователя (заменяет CODE ноду)
+  const normalizeUserData = (user: any): any => {
+    // Нормализуем поля (на случай разных названий в БД)
+    const personId = user.person_id || user.user_id || user.id || null;
+    const username = user.username || user.tg_username || user.name || 'Unknown';
+    const firstName = user.first_name || user.firstName || '';
+    const lastName = user.last_name || user.lastName || '';
+    const walletAddress = user.wallet_address || user.wallet || null;
+    const hexWalletAddress = user.hex_wallet_address || user.hex_wallet || null;
+    const photoUrl = user.photo_url || user.avatar_url || user.avatar || null;
+    const tgId = user.tg_id || user.telegram_id || user.telegramId || '';
+    
+    // Обрабатываем total_asics (может быть строкой или числом)
+    const totalAsics = user.total_asics || user.total_asics_count || user.asic_count || user.asics || 0;
+    const totalAsicsNumber = typeof totalAsics === 'string' ? parseInt(totalAsics) || 0 : parseInt(totalAsics) || 0;
+    
+    // Обрабатываем level (может быть строкой или числом)
+    const level = user.level !== undefined && user.level !== null 
+      ? (typeof user.level === 'string' ? parseInt(user.level) || 0 : parseInt(user.level) || 0)
+      : null;
+    
+    // Обрабатываем effective_ths (может быть строкой или числом)
+    const effectiveThs = user.effective_ths || user.effective_th || 0;
+    const effectiveThsNumber = typeof effectiveThs === 'string' ? parseFloat(effectiveThs) || 0 : parseFloat(effectiveThs) || 0;
+    
+    // Обрабатываем progress_cached (может быть строкой или числом)
+    const progressCached = user.progress_cached || user.progress || 0;
+    const progressCachedNumber = typeof progressCached === 'string' ? parseFloat(progressCached) || 0 : parseFloat(progressCached) || 0;
+    
+    // Обрабатываем level_updated_at
+    const levelUpdatedAt = user.level_updated_at || null;
+    
+    // Обрабатываем total_balance и balance_by_asset
+    const totalBalance = user.total_balance ? (typeof user.total_balance === 'string' ? parseFloat(user.total_balance) || 0 : parseFloat(user.total_balance) || 0) : 0;
+    const balanceByAsset = user.balance_by_asset || {};
+    
+    // Обрабатываем assets_metadata и заменяем ECOScoin на XP
+    const assetsMetadataRaw = user.assets_metadata || {};
+    const assetsMetadata: any = {};
+    for (const assetId in assetsMetadataRaw) {
+      if (assetsMetadataRaw.hasOwnProperty(assetId)) {
+        const asset = assetsMetadataRaw[assetId];
+        assetsMetadata[assetId] = {
+          ...asset,
+          name: asset.name === 'ECOScoin' ? 'XP' : (asset.name || `Asset ${assetId}`)
+        };
+      }
+    }
+    
+    // Обрабатываем balance_history
+    const balanceHistory = user.balance_history || {};
+    
+    // Обрабатываем last_transaction
+    const lastTransaction = user.last_transaction || null;
+    
+    // Обрабатываем all_transactions (все транзакции пользователя)
+    let allTransactions: any[] = [];
+    if (user.all_transactions) {
+      if (Array.isArray(user.all_transactions)) {
+        allTransactions = user.all_transactions;
+      } else if (typeof user.all_transactions === 'string') {
+        try {
+          allTransactions = JSON.parse(user.all_transactions);
+          if (!Array.isArray(allTransactions)) {
+            allTransactions = [];
+          }
+        } catch (e) {
+          console.warn('Ошибка парсинга all_transactions:', e);
+          allTransactions = [];
+        }
+      } else if (typeof user.all_transactions === 'object') {
+        if (Array.isArray(user.all_transactions.transactions)) {
+          allTransactions = user.all_transactions.transactions;
+        } else {
+          allTransactions = [];
+        }
+      }
+    }
+    
+    // Обрабатываем transactions_by_type (статистика по типам операций)
+    let transactionsByType: any = {};
+    if (user.transactions_by_type) {
+      if (typeof user.transactions_by_type === 'object' && !Array.isArray(user.transactions_by_type)) {
+        transactionsByType = user.transactions_by_type;
+      } else if (typeof user.transactions_by_type === 'string') {
+        try {
+          transactionsByType = JSON.parse(user.transactions_by_type);
+          if (Array.isArray(transactionsByType) || typeof transactionsByType !== 'object') {
+            transactionsByType = {};
+          }
+        } catch (e) {
+          console.warn('Ошибка парсинга transactions_by_type:', e);
+          transactionsByType = {};
+        }
+      }
+    }
+    
+    // Обрабатываем mining_summary
+    const miningSummary = user.mining_summary || {};
+    
+    // Обрабатываем last_mining
+    const lastMining = user.last_mining || null;
+    
+    // Обрабатываем checkin_summary
+    const checkinSummary = user.checkin_summary || {};
+    
+    // Обрабатываем streak_summary
+    const streakSummary = user.streak_summary || {};
+    
+    // Обрабатываем participation_summary
+    const participationSummary = user.participation_summary || {};
+    
+    // Обрабатываем poke данные
+    const pokeSentCount = user.poke_sent_count ? (typeof user.poke_sent_count === 'string' ? parseInt(user.poke_sent_count) || 0 : parseInt(user.poke_sent_count) || 0) : 0;
+    const pokeReceivedCount = user.poke_received_count ? (typeof user.poke_received_count === 'string' ? parseInt(user.poke_received_count) || 0 : parseInt(user.poke_received_count) || 0) : 0;
+    const pokeRewards = user.poke_rewards || [];
+    
+    // Обрабатываем referrals
+    const totalReferrals = user.total_referrals ? (typeof user.total_referrals === 'string' ? parseInt(user.total_referrals) || 0 : parseInt(user.total_referrals) || 0) : 0;
+    const referees = user.referees || [];
+    
+    // Обрабатываем orders
+    const totalOrders = user.total_orders ? (typeof user.total_orders === 'string' ? parseInt(user.total_orders) || 0 : parseInt(user.total_orders) || 0) : 0;
+    const totalPointsSpent = user.total_points_spent ? (typeof user.total_points_spent === 'string' ? parseFloat(user.total_points_spent) || 0 : parseFloat(user.total_points_spent) || 0) : 0;
+    const totalTonSpent = user.total_ton_spent ? (typeof user.total_ton_spent === 'string' ? parseFloat(user.total_ton_spent) || 0 : parseFloat(user.total_ton_spent) || 0) : 0;
+    const orders = user.orders || [];
+    
+    // Обрабатываем ownership_details
+    const ownershipDetails = user.ownership_details || [];
+    
+    // Обрабатываем photo_url (может быть tg_photo_url)
+    const finalPhotoUrl = photoUrl || user.tg_photo_url || null;
+    
+    return {
+      person_id: parseInt(String(personId)) || 0,
+      person_language: user.person_language || user.language || 'en',
+      wallet_address: walletAddress,
+      hex_wallet_address: hexWalletAddress,
+      is_ecos_premium: user.is_ecos_premium === true || user.is_ecos_premium === 'true' || user.ecos_premium === true,
+      ecos_premium_until: user.ecos_premium_until || user.premium_until || null,
+      onbording_done: user.onbording_done === true || user.onbording_done === 'true' || user.onboarding_done === true,
+      person_created_at: user.person_created_at || user.created_at || user.registered_at || '',
+      person_updated_at: user.person_updated_at || user.updated_at || '',
+      tg_id: String(tgId),
+      first_name: firstName,
+      last_name: lastName,
+      username: username,
+      tg_language: user.tg_language || user.telegram_language || user.language || 'en',
+      tg_premium: user.tg_premium === true || user.tg_premium === 'true' || user.telegram_premium === true,
+      photo_url: finalPhotoUrl,
+      tg_created_at: user.tg_created_at || user.telegram_created_at || user.person_created_at || '',
+      tg_updated_at: user.tg_updated_at || user.telegram_updated_at || user.person_updated_at || '',
+      total_asics: totalAsicsNumber,
+      total_th: totalAsicsNumber * 234, // Вычисляем Th: ASIC * 234
+      level: level,
+      effective_ths: effectiveThsNumber,
+      progress_cached: progressCachedNumber,
+      level_updated_at: levelUpdatedAt,
+      ownership_details: ownershipDetails,
+      total_balance: totalBalance,
+      balance_by_asset: balanceByAsset,
+      assets_metadata: assetsMetadata,
+      balance_history: balanceHistory,
+      last_transaction: lastTransaction,
+      all_transactions: allTransactions,
+      transactions_by_type: transactionsByType,
+      mining_summary: miningSummary,
+      last_mining: lastMining,
+      checkin_summary: checkinSummary,
+      streak_summary: streakSummary,
+      participation_summary: participationSummary,
+      poke_sent_count: pokeSentCount,
+      poke_received_count: pokeReceivedCount,
+      poke_rewards: pokeRewards,
+      total_referrals: totalReferrals,
+      referees: referees,
+      total_orders: totalOrders,
+      total_points_spent: totalPointsSpent,
+      total_ton_spent: totalTonSpent,
+      orders: orders
+    };
+  };
+
+  const loadAllUsersData = async () => {
+    console.log('🚀 loadAllUsersData вызвана');
+    setAllUsersLoading(true);
+    
+    // Скрываем остальную статистику
+    setUsersData(null);
+    setWalletsData(null);
+    setEventsData(null);
+    setReferralsData(null);
+    setWalletUsers(null);
+    setFunnelData(null);
+    setLeadersData(null);
+    setPoolsData(null);
+    setKpiData(null);
+    setAllUsersData(null);
+    
+    try {
+      const webhookUrl = import.meta.env.DEV 
+        ? '/webhook/game-all-users'
+        : 'https://n8n-p.blc.am/webhook/game-all-users';
+      
+      console.log('🔗 Загрузка данных всех пользователей с:', webhookUrl);
+      
+      const response = await fetch(webhookUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('📡 Response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Response error:', errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}\n${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('📊 Полученные данные всех пользователей (RAW):', data);
+      console.log('📊 Тип данных:', typeof data);
+      console.log('📊 Является массивом:', Array.isArray(data));
+      
+      // Извлекаем массив пользователей из разных форматов ответа
+      let rawUsers: any[] = [];
+      
+      if (Array.isArray(data)) {
+        // Если это массив пользователей напрямую
+        rawUsers = data;
+        console.log('✅ Данные - массив пользователей');
+      } else if (data && typeof data === 'object') {
+        // Если это объект
+        if (data.users && Array.isArray(data.users)) {
+          rawUsers = data.users;
+          console.log('✅ Данные - объект с users');
+        } else if (data.json && data.json.users && Array.isArray(data.json.users)) {
+          rawUsers = data.json.users;
+          console.log('✅ Данные - объект с json.users');
+        } else if (data.result && Array.isArray(data.result)) {
+          rawUsers = data.result;
+          console.log('✅ Данные - объект с result');
+        } else if (data.rows && Array.isArray(data.rows)) {
+          rawUsers = data.rows;
+          console.log('✅ Данные - объект с rows');
+        } else if (data.person_id !== undefined || data.user_id !== undefined) {
+          // Если это один пользователь
+          rawUsers = [data];
+          console.log('✅ Данные - один пользователь');
+        } else {
+          console.error('❌ Неизвестный формат данных:', data);
+          throw new Error('Неверный формат данных от webhook.');
+        }
+      } else {
+        console.error('❌ Неизвестный формат данных:', data);
+        throw new Error('Неверный формат данных от webhook.');
+      }
+      
+      console.log(`📊 Получено ${rawUsers.length} пользователей из webhook`);
+      
+      // Нормализуем данные пользователей на фронте (заменяет CODE ноду)
+      // Обрабатываем данные порциями, чтобы не блокировать UI
+      const BATCH_SIZE = 1000; // Обрабатываем по 1000 пользователей за раз
+      const normalizedUsers: any[] = [];
+      
+      console.log(`🔄 Начинаем нормализацию ${rawUsers.length} пользователей порциями по ${BATCH_SIZE}...`);
+      
+      for (let i = 0; i < rawUsers.length; i += BATCH_SIZE) {
+        const batch = rawUsers.slice(i, i + BATCH_SIZE);
+        const normalizedBatch = batch.map(user => normalizeUserData(user));
+        normalizedUsers.push(...normalizedBatch);
+        
+        // Показываем прогресс каждые 10000 пользователей
+        if ((i + BATCH_SIZE) % 10000 === 0 || i + BATCH_SIZE >= rawUsers.length) {
+          console.log(`✅ Обработано ${Math.min(i + BATCH_SIZE, rawUsers.length)} / ${rawUsers.length} пользователей`);
+          // Даем браузеру возможность обновить UI
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      }
+      
+      const processedData = {
+        users: normalizedUsers,
+        total: normalizedUsers.length
+      };
+      
+      console.log('📊 Обработанные данные:', processedData);
+      console.log('📊 Количество пользователей:', processedData.total);
+      setAllUsersData(processedData);
+      console.log('✅ Данные всех пользователей установлены в состояние');
+      
+    } catch (e: any) {
+      console.error('❌ Ошибка при загрузке данных всех пользователей:', e);
+      console.error('❌ Stack:', e.stack);
+      
+      let errorMessage = 'Неизвестная ошибка';
+      if (e.message.includes('Failed to fetch')) {
+        errorMessage = 'Failed to fetch. Возможные причины:\n' +
+          '1. CORS-ошибка (проверьте настройки n8n)\n' +
+          '2. Webhook неактивен\n' +
+          '3. Проблемы с сетью';
+      } else if (e.message.includes('NetworkError')) {
+        errorMessage = 'Ошибка сети. Проверьте подключение к интернету.';
+      } else {
+        errorMessage = e.message;
+      }
+      
+      const fullErrorMessage = `Ошибка загрузки данных всех пользователей: ${errorMessage}\n\nУбедитесь, что webhook "game-all-users" активен в n8n.\n\nПроверьте консоль браузера для деталей.`;
+      alert(fullErrorMessage);
+    } finally {
+      setAllUsersLoading(false);
+      console.log('🏁 loadAllUsersData завершена');
+    }
+  };
+
+  const loadUserDetails = async (personId: number) => {
+    console.log('🚀 loadUserDetails вызвана для person_id:', personId, '(тип:', typeof personId, ')');
+    setUserDetails({ user: null, loading: true });
+    
+    try {
+      // Убеждаемся, что personId - это число
+      const personIdNum = parseInt(String(personId));
+      if (isNaN(personIdNum)) {
+        throw new Error(`Некорректный person_id: ${personId}`);
+      }
+      
+      const webhookUrl = import.meta.env.DEV 
+        ? `/webhook/game-user-4kpi?person_id=${personIdNum}`
+        : `https://n8n-p.blc.am/webhook/game-user-4kpi?person_id=${personIdNum}`;
+      
+      console.log('🔗 Загрузка деталей пользователя с:', webhookUrl);
+      
+      const response = await fetch(webhookUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      console.log('📡 Response status:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('📊 Полученные данные пользователя (RAW):', data);
+      console.log('📊 Полный JSON ответ:', JSON.stringify(data, null, 2));
+      console.log('📊 Тип данных:', typeof data);
+      console.log('📊 Является массивом:', Array.isArray(data));
+      console.log('🔍 Ищем пользователя с person_id:', personId);
+      
+      // Обрабатываем разные форматы ответа
+      let userData = null;
+      let allUsers: any[] = [];
+      
+      if (Array.isArray(data)) {
+        // Если это массив
+        console.log('📦 Данные - массив, длина:', data.length);
+        if (data.length > 0) {
+          const firstItem = data[0];
+          console.log('📦 Первый элемент массива:', firstItem);
+          // Проверяем, есть ли в нем users
+          if (firstItem && firstItem.users && Array.isArray(firstItem.users)) {
+            allUsers = firstItem.users;
+            console.log('✅ Извлечено users из первого элемента массива');
+          } else if (firstItem && (firstItem.person_id !== undefined || firstItem.id !== undefined || firstItem.user_id !== undefined)) {
+            // Если это массив пользователей
+            allUsers = data;
+            console.log('✅ Данные - массив пользователей');
+          } else {
+            // Если это массив объектов с users
+            allUsers = data.flatMap((item: any) => {
+              if (item && item.users && Array.isArray(item.users)) {
+                return item.users;
+              }
+              return item && (item.person_id !== undefined || item.id !== undefined || item.user_id !== undefined) ? [item] : [];
+            });
+            console.log('✅ Извлечено из массива объектов');
+          }
+        }
+      } else if (data && typeof data === 'object') {
+        // Если это объект
+        console.log('📦 Данные - объект, ключи:', Object.keys(data));
+        if (data.users && Array.isArray(data.users)) {
+          allUsers = data.users;
+          console.log('✅ Извлечено users из объекта');
+        } else if (data.json && data.json.users && Array.isArray(data.json.users)) {
+          allUsers = data.json.users;
+          console.log('✅ Извлечено json.users из объекта');
+        } else if (data.result && Array.isArray(data.result)) {
+          allUsers = data.result;
+          console.log('✅ Извлечено result из объекта');
+        } else if (data.rows && Array.isArray(data.rows)) {
+          allUsers = data.rows;
+          console.log('✅ Извлечено rows из объекта');
+        } else if (data.person_id !== undefined || data.id !== undefined || data.user_id !== undefined) {
+          // Если это сам объект пользователя
+          allUsers = [data];
+          console.log('✅ Данные - один объект пользователя');
+        } else {
+          // Попробуем найти любые поля, которые могут содержать массив пользователей
+          for (const key in data) {
+            if (Array.isArray(data[key]) && data[key].length > 0) {
+              const firstItem = data[key][0];
+              if (firstItem && (firstItem.person_id !== undefined || firstItem.id !== undefined || firstItem.user_id !== undefined)) {
+                allUsers = data[key];
+                console.log(`✅ Найден массив пользователей в поле "${key}"`);
+                break;
+              }
+            }
+          }
+        }
+      }
+      
+      console.log(`📊 Найдено ${allUsers.length} пользователей в ответе`);
+      if (allUsers.length > 0) {
+        console.log('📋 Первый пользователь:', allUsers[0]);
+        console.log('📋 Все person_id в ответе:', allUsers.map((u: any) => ({
+          person_id: u.person_id,
+          id: u.id,
+          user_id: u.user_id,
+          username: u.username || u.tg_username || u.name
+        })));
+      }
+      
+      // Ищем пользователя с нужным person_id (пробуем разные поля)
+      // ВАЖНО: Сравниваем строго по id/person_id, который был запрошен
+      const requestedIdNum = parseInt(String(personId));
+      console.log(`🔍 Ищем пользователя с ID ${requestedIdNum} среди ${allUsers.length} пользователей`);
+      
+      userData = allUsers.find((user: any) => {
+        // Пробуем все возможные поля для ID
+        const userId = user.person_id ?? user.id ?? user.user_id ?? user.personId ?? user.userId;
+        
+        if (userId === undefined || userId === null) {
+          return false;
+        }
+        
+        // Сравниваем как числа
+        const userIdNum = parseInt(String(userId));
+        const match = userIdNum === requestedIdNum;
+        
+        console.log(`  🔎 Проверяем пользователя: userId=${userId} (${typeof userId}, parsed=${userIdNum}), requestedId=${requestedIdNum}, match=${match}`);
+        
+        if (match) {
+          console.log('✅ Найден пользователь:', user.username || user.first_name || user.tg_username, 'с ID:', userId);
+        }
+        return match;
+      });
+      
+      // Если не нашли точного совпадения, но получили 1 пользователя - возможно webhook игнорирует параметр
+      // В этом случае показываем предупреждение, но все равно используем полученного пользователя
+      if (!userData && allUsers.length === 1) {
+        const singleUser = allUsers[0];
+        const userId = singleUser.person_id ?? singleUser.id ?? singleUser.user_id ?? singleUser.personId ?? singleUser.userId;
+        const userIdNum = userId !== undefined && userId !== null ? parseInt(String(userId)) : null;
+        
+        console.warn('⚠️ ВНИМАНИЕ: Webhook вернул пользователя с другим ID!');
+        console.warn(`  Запрошенный ID: ${requestedIdNum}`);
+        console.warn(`  Полученный ID: ${userIdNum}`);
+        console.warn(`  Это может означать, что webhook игнорирует параметр person_id или возвращает всегда одного пользователя`);
+        
+        // Используем полученного пользователя, но показываем предупреждение
+        userData = singleUser;
+        console.log('✅ Используем полученного пользователя (ID может не совпадать)');
+      }
+      
+      // Если все еще не нашли
+      if (!userData) {
+        console.error('❌ Пользователь с точным ID не найден!');
+        console.log('📋 Запрошенный ID:', requestedIdNum, '(тип:', typeof requestedIdNum, ')');
+        console.log('📋 Все ID в ответе:', allUsers.map((u: any) => {
+          const uid = u.person_id ?? u.id ?? u.user_id ?? u.personId ?? u.userId;
+          return {
+            person_id: u.person_id,
+            id: u.id,
+            user_id: u.user_id,
+            personId: u.personId,
+            userId: u.userId,
+            parsed_id: uid !== undefined && uid !== null ? parseInt(String(uid)) : null,
+            username: u.username || u.tg_username || u.name
+          };
+        }));
+        throw new Error(`Пользователь с ID ${requestedIdNum} не найден в ответе webhook. Получено ${allUsers.length} пользователей.`);
+      }
+      
+      // Нормализуем данные пользователя (используем ту же функцию, что и для списка)
+      const normalizedUser = normalizeUserData(userData);
+      
+      console.log('✅ Данные пользователя извлечены и нормализованы:', {
+        person_id: normalizedUser.person_id,
+        username: normalizedUser.username,
+        first_name: normalizedUser.first_name
+      });
+      
+      setUserDetails({ user: normalizedUser, loading: false });
+    } catch (e: any) {
+      console.error('❌ Ошибка загрузки деталей пользователя:', e);
+      setUserDetails(null);
+      
+      let errorMessage = 'Неизвестная ошибка';
+      if (e.message.includes('Failed to fetch')) {
+        errorMessage = 'Failed to fetch. Возможные причины:\n' +
+          '1. CORS-ошибка (проверьте настройки n8n)\n' +
+          '2. Webhook неактивен\n' +
+          '3. Проблемы с сетью';
+      } else if (e.message.includes('NetworkError')) {
+        errorMessage = 'Ошибка сети. Проверьте подключение к интернету.';
+      } else {
+        errorMessage = e.message;
+      }
+      
+      const fullErrorMessage = `Ошибка загрузки деталей пользователя: ${errorMessage}\n\nУбедитесь, что webhook "game-user-4kpi" активен в n8n.\n\nПроверьте консоль браузера для деталей.`;
+      alert(fullErrorMessage);
     }
   };
 
@@ -1697,7 +2425,8 @@ const Dashboard: React.FC = () => {
   }, [filteredData]);
 
   useEffect(() => {
-    load();
+    // Автоматическая загрузка dashboard-stats отключена, так как webhook может быть неактивен
+    // load();
     // Автоматическое обновление отключено - данные статичны
   }, []);
 
@@ -1723,6 +2452,199 @@ const Dashboard: React.FC = () => {
     }
   }, [levelUsersModal]);
 
+  // Блокируем скролл основного экрана при открытом модальном окне деталей пользователя
+  useEffect(() => {
+    if (userDetails) {
+      // Сохраняем текущую позицию скролла
+      const scrollY = window.scrollY;
+      // Блокируем скролл
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+      
+      return () => {
+        // Восстанавливаем скролл при закрытии модального окна
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        document.body.style.overflow = '';
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [userDetails]);
+
+  // Фильтрация и сортировка данных для All Users Info
+  const filteredAndSortedUsers = useMemo(() => {
+    if (!allUsersData) return [];
+    
+    let filtered = [...allUsersData.users];
+
+    // Применяем фильтры
+    if (allUsersFilters.search) {
+      const searchLower = allUsersFilters.search.toLowerCase();
+      filtered = filtered.filter(user => 
+        user.username?.toLowerCase().includes(searchLower) ||
+        user.first_name?.toLowerCase().includes(searchLower) ||
+        user.last_name?.toLowerCase().includes(searchLower) ||
+        String(user.person_id).includes(searchLower) ||
+        user.tg_id?.toLowerCase().includes(searchLower) ||
+        user.wallet_address?.toLowerCase().includes(searchLower) ||
+        user.hex_wallet_address?.toLowerCase().includes(searchLower) ||
+        `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchLower)
+      );
+    }
+
+    if (allUsersFilters.ecosPremium !== 'all') {
+      filtered = filtered.filter(user => 
+        allUsersFilters.ecosPremium === 'premium' ? user.is_ecos_premium : !user.is_ecos_premium
+      );
+    }
+
+    if (allUsersFilters.tgPremium !== 'all') {
+      filtered = filtered.filter(user => 
+        allUsersFilters.tgPremium === 'premium' ? user.tg_premium : !user.tg_premium
+      );
+    }
+
+    if (allUsersFilters.onboarding !== 'all') {
+      filtered = filtered.filter(user => 
+        allUsersFilters.onboarding === 'done' ? user.onbording_done : !user.onbording_done
+      );
+    }
+
+    if (allUsersFilters.language !== 'all') {
+      filtered = filtered.filter(user => 
+        user.person_language === allUsersFilters.language || user.tg_language === allUsersFilters.language
+      );
+    }
+
+    if (allUsersFilters.level !== 'all') {
+      const levelFilter = parseInt(allUsersFilters.level);
+      if (!isNaN(levelFilter)) {
+        filtered = filtered.filter(user => 
+          user.level !== null && user.level === levelFilter
+        );
+      }
+    }
+
+    if (allUsersFilters.minAsic) {
+      const minAsic = parseInt(allUsersFilters.minAsic) || 0;
+      filtered = filtered.filter(user => (user.total_asics || 0) >= minAsic);
+    }
+
+    if (allUsersFilters.maxAsic) {
+      const maxAsic = parseInt(allUsersFilters.maxAsic) || Infinity;
+      filtered = filtered.filter(user => (user.total_asics || 0) <= maxAsic);
+    }
+
+    if (allUsersFilters.minTh) {
+      const minTh = parseInt(allUsersFilters.minTh) || 0;
+      filtered = filtered.filter(user => (user.total_th || 0) >= minTh);
+    }
+
+    if (allUsersFilters.maxTh) {
+      const maxTh = parseInt(allUsersFilters.maxTh) || Infinity;
+      filtered = filtered.filter(user => (user.total_th || 0) <= maxTh);
+    }
+
+    // Фильтр по дате регистрации
+    if (allUsersFilters.dateFrom) {
+      const dateFrom = new Date(allUsersFilters.dateFrom);
+      dateFrom.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(user => {
+        if (!user.person_created_at) return false;
+        const userDate = new Date(user.person_created_at);
+        userDate.setHours(0, 0, 0, 0);
+        return userDate >= dateFrom;
+      });
+    }
+
+    if (allUsersFilters.dateTo) {
+      const dateTo = new Date(allUsersFilters.dateTo);
+      dateTo.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(user => {
+        if (!user.person_created_at) return false;
+        const userDate = new Date(user.person_created_at);
+        return userDate <= dateTo;
+      });
+    }
+
+    // Применяем сортировку
+    if (allUsersSort.field) {
+      filtered.sort((a, b) => {
+        let aVal: any = a[allUsersSort.field as keyof typeof a];
+        let bVal: any = b[allUsersSort.field as keyof typeof b];
+
+        // Обработка разных типов данных
+        if (typeof aVal === 'string' && typeof bVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+        } else if (typeof aVal === 'number' && typeof bVal === 'number') {
+          // Числа сортируем как есть
+        } else {
+          aVal = aVal || 0;
+          bVal = bVal || 0;
+        }
+
+        if (aVal < bVal) return allUsersSort.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return allUsersSort.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return filtered;
+  }, [allUsersData, allUsersFilters, allUsersSort]);
+
+  // Получаем уникальные языки для фильтра
+  const uniqueLanguages = useMemo(() => {
+    if (!allUsersData) return [];
+    const languages = new Set<string>();
+    allUsersData.users.forEach(user => {
+      if (user.person_language) languages.add(user.person_language);
+      if (user.tg_language) languages.add(user.tg_language);
+    });
+    return Array.from(languages).sort();
+  }, [allUsersData]);
+
+  // Получаем уникальные уровни для фильтра
+  const uniqueLevels = useMemo(() => {
+    if (!allUsersData) return [];
+    const levels = new Set<number>();
+    allUsersData.users.forEach(user => {
+      if (user.level !== null && user.level !== undefined) {
+        levels.add(user.level);
+      }
+    });
+    return Array.from(levels).sort((a, b) => a - b);
+  }, [allUsersData]);
+
+  const handleSort = (field: string) => {
+    setAllUsersSort(prev => ({
+      field,
+      direction: prev.field === field && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const getSortIcon = (field: string) => {
+    if (allUsersSort.field !== field) {
+      return (
+        <svg className="w-4 h-4 inline-block ml-1 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
+      );
+    }
+    return allUsersSort.direction === 'asc' ? (
+      <svg className="w-4 h-4 inline-block ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+      </svg>
+    ) : (
+      <svg className="w-4 h-4 inline-block ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    );
+  };
+
   if (loading) {
     return (
       <div className="max-w-md mx-auto px-4 py-6 md:max-w-4xl">
@@ -1747,15 +2669,15 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (!stats) return null;
-
   // Удалены захардкоженные карточки майнинга
 
   return (
     <div className="max-w-md mx-auto px-4 py-6 md:max-w-4xl">
       <div className="mb-6 text-center">
         <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-orange-500 to-orange-600 bg-clip-text text-transparent">Дашборд ECOSMiningGame</h1>
-        <p className={`text-xs mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Обновлено: {new Date(stats.updatedAtIso).toLocaleString('ru-RU')}</p>
+        {stats && (
+          <p className={`text-xs mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Обновлено: {new Date(stats.updatedAtIso).toLocaleString('ru-RU')}</p>
+        )}
       </div>
 
       {/* Удалены захардкоженные карточки майнинга */}
@@ -1911,7 +2833,7 @@ const Dashboard: React.FC = () => {
               <svg className={`w-4 h-4 ${isDark ? 'text-cyan-400' : 'text-cyan-600'} group-hover:scale-110 transition-transform`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
-              <span>показать Funnel события</span>
+              <span>Users по уровням</span>
             </>
           )}
         </button>
@@ -1938,6 +2860,58 @@ const Dashboard: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
               </svg>
               <span>Таблица лидеров</span>
+            </>
+          )}
+        </button>
+
+        <button
+          onClick={loadKpiData}
+          disabled={kpiLoading}
+          className={`group relative w-full md:w-[280px] md:min-w-[280px] h-[44px] px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 border text-sm whitespace-nowrap ${
+            kpiLoading
+              ? 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 cursor-not-allowed text-gray-400'
+              : isDark
+              ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-750 hover:border-slate-600 shadow-sm hover:shadow-md'
+              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm hover:shadow-md'
+          }`}
+        >
+          {kpiLoading ? (
+            <>
+              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+              <span>Загрузка данных...</span>
+            </>
+          ) : (
+            <>
+              <svg className={`w-4 h-4 ${isDark ? 'text-purple-400' : 'text-purple-600'} group-hover:scale-110 transition-transform`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              <span>Users KPI</span>
+            </>
+          )}
+        </button>
+
+        <button
+          onClick={loadAllUsersData}
+          disabled={allUsersLoading}
+          className={`group relative w-full md:w-[280px] md:min-w-[280px] h-[44px] px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 border text-sm whitespace-nowrap ${
+            allUsersLoading
+              ? 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 cursor-not-allowed text-gray-400'
+              : isDark
+              ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-750 hover:border-slate-600 shadow-sm hover:shadow-md'
+              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm hover:shadow-md'
+          }`}
+        >
+          {allUsersLoading ? (
+            <>
+              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+              <span>Загрузка данных...</span>
+            </>
+          ) : (
+            <>
+              <svg className={`w-4 h-4 ${isDark ? 'text-green-400' : 'text-green-600'} group-hover:scale-110 transition-transform`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              <span>All Users Info</span>
             </>
           )}
         </button>
@@ -3778,7 +4752,7 @@ const Dashboard: React.FC = () => {
             <svg className="w-6 h-6 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">📊 Funnel события - Статистика по уровням</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">📊 Users по уровням</h2>
           </div>
 
           <div className="space-y-6">
@@ -4205,6 +5179,705 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
+      {/* Отображение KPI данных */}
+      {kpiLoading && (
+        <div className="mb-6">
+          <div className={`p-6 rounded-xl shadow-lg ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+              <p className={`${isDark ? 'text-white' : 'text-gray-900'}`}>Загрузка KPI данных...</p>
+            </div>
+          </div>
+        </div>
+      )}
+      {kpiData && (
+        <div className="mb-6 pb-20">
+          <div className="flex items-center gap-3 mb-6">
+            <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">📊 Users KPI - Статистика по уровням</h2>
+          </div>
+
+          {/* Общая статистика */}
+          <div className={`p-6 rounded-xl shadow-lg mb-6 ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Всего пользователей</p>
+                <p className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  {numberFormat(kpiData.total_users)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Карточки уровней */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6">
+            {Array.from({ length: 11 }, (_, i) => i).map((level) => {
+              const levelStat = kpiData.level_stats.find(s => s.level === level) || {
+                level,
+                users_per_level: 0,
+                percentage: '0.00'
+              };
+              const isSelected = selectedKpiLevel === level;
+                const getLevelColor = (level: number) => {
+                  if (level === 0) return isDark ? 'bg-gray-600' : 'bg-gray-200';
+                  if (level <= 3) return isDark ? 'bg-blue-600' : 'bg-blue-200';
+                  if (level <= 6) return isDark ? 'bg-purple-600' : 'bg-purple-200';
+                  return isDark ? 'bg-yellow-600' : 'bg-yellow-200';
+                };
+
+                const getLevelTextColor = (level: number) => {
+                  if (level === 0) return isDark ? 'text-gray-300' : 'text-gray-700';
+                  if (level <= 3) return isDark ? 'text-blue-300' : 'text-blue-700';
+                  if (level <= 6) return isDark ? 'text-purple-300' : 'text-purple-700';
+                  return isDark ? 'text-yellow-300' : 'text-yellow-700';
+                };
+
+                return (
+                  <div
+                    key={level}
+                    onClick={() => setSelectedKpiLevel(isSelected ? null : level)}
+                    className={`p-4 rounded-xl shadow-lg cursor-pointer transition-all hover:shadow-xl border-2 ${
+                      isSelected
+                        ? isDark
+                          ? 'bg-purple-900 border-purple-500'
+                          : 'bg-purple-50 border-purple-500'
+                        : isDark
+                        ? 'bg-gray-800 border-gray-700 hover:border-gray-600'
+                        : 'bg-white border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center font-bold text-lg ${getLevelColor(level)} ${getLevelTextColor(level)}`}>
+                        {level}
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          {numberFormat(levelStat.users_per_level)}
+                        </p>
+                        <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {levelStat.percentage}%
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <div className={`w-full h-2 rounded-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                        <div
+                          className={`h-2 rounded-full transition-all ${getLevelColor(level)}`}
+                          style={{
+                            width: `${Math.min(parseFloat(levelStat.percentage), 100)}%`
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-2 text-center">
+                      <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {isSelected ? 'Нажмите, чтобы свернуть' : 'Нажмите для деталей'}
+                      </p>
+                    </div>
+                  </div>
+                );
+            })}
+          </div>
+
+          {/* Детальная информация выбранного уровня */}
+          {selectedKpiLevel !== null && (
+            <div className={`p-6 rounded-xl shadow-lg ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  Уровень {selectedKpiLevel} - Детальная информация
+                </h3>
+                <button
+                  onClick={() => setSelectedKpiLevel(null)}
+                  className={`px-4 py-2 rounded-lg ${isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} transition-colors`}
+                >
+                  Свернуть
+                </button>
+              </div>
+              {(() => {
+                const levelStat = kpiData.level_stats.find(s => s.level === selectedKpiLevel);
+                if (!levelStat) return null;
+                return (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Пользователей на уровне</p>
+                        <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          {numberFormat(levelStat.users_per_level)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Процент от общего</p>
+                        <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          {levelStat.percentage}%
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <button
+                        onClick={() => {
+                          // TODO: Загрузить детальный список пользователей уровня
+                          console.log('Загрузка пользователей уровня', selectedKpiLevel);
+                        }}
+                        className={`w-full px-4 py-3 rounded-lg font-medium transition-colors ${
+                          isDark
+                            ? 'bg-purple-700 hover:bg-purple-600 text-white'
+                            : 'bg-purple-600 hover:bg-purple-700 text-white'
+                        }`}
+                      >
+                        Показать всех пользователей уровня {selectedKpiLevel}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Отображение данных всех пользователей */}
+      {allUsersData && (
+          <div className="mb-6 pb-20">
+            <div className="flex items-center gap-3 mb-6">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">👥 All Users Info</h2>
+            </div>
+
+            {/* Общая статистика */}
+            <div className={`p-6 rounded-xl shadow-lg mb-6 ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Всего пользователей</p>
+                  <p className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    {numberFormat(allUsersData.total)}
+                  </p>
+                </div>
+                <div>
+                  <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Показано после фильтров</p>
+                  <p className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    {numberFormat(filteredAndSortedUsers.length)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Фильтры */}
+            <div className={`p-6 rounded-xl shadow-lg mb-6 ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+              <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Фильтры</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                {/* Поиск */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Поиск
+                  </label>
+                  <input
+                    type="text"
+                    value={allUsersFilters.search}
+                    onChange={(e) => setAllUsersFilters(prev => ({ ...prev, search: e.target.value }))}
+                    placeholder="Username, ID, TG ID, Wallet, Имя..."
+                    className={`w-full px-4 py-2 rounded-lg border ${
+                      isDark 
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500`}
+                  />
+                </div>
+
+                {/* ECOS Premium фильтр */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    ECOS Premium
+                  </label>
+                  <select
+                    value={allUsersFilters.ecosPremium}
+                    onChange={(e) => setAllUsersFilters(prev => ({ ...prev, ecosPremium: e.target.value as any }))}
+                    className={`w-full px-4 py-2 rounded-lg border ${
+                      isDark 
+                        ? 'bg-gray-700 border-gray-600 text-white' 
+                        : 'bg-white border-gray-300 text-gray-900'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500`}
+                  >
+                    <option value="all">Все</option>
+                    <option value="premium">Premium</option>
+                    <option value="free">Free</option>
+                  </select>
+                </div>
+
+                {/* TG Premium фильтр */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    TG Premium
+                  </label>
+                  <select
+                    value={allUsersFilters.tgPremium}
+                    onChange={(e) => setAllUsersFilters(prev => ({ ...prev, tgPremium: e.target.value as any }))}
+                    className={`w-full px-4 py-2 rounded-lg border ${
+                      isDark 
+                        ? 'bg-gray-700 border-gray-600 text-white' 
+                        : 'bg-white border-gray-300 text-gray-900'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500`}
+                  >
+                    <option value="all">Все</option>
+                    <option value="premium">Premium</option>
+                    <option value="free">Free</option>
+                  </select>
+                </div>
+
+                {/* Onboarding фильтр */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Onboarding
+                  </label>
+                  <select
+                    value={allUsersFilters.onboarding}
+                    onChange={(e) => setAllUsersFilters(prev => ({ ...prev, onboarding: e.target.value as any }))}
+                    className={`w-full px-4 py-2 rounded-lg border ${
+                      isDark 
+                        ? 'bg-gray-700 border-gray-600 text-white' 
+                        : 'bg-white border-gray-300 text-gray-900'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500`}
+                  >
+                    <option value="all">Все</option>
+                    <option value="done">Done</option>
+                    <option value="pending">Pending</option>
+                  </select>
+                </div>
+
+                {/* Язык фильтр */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Язык
+                  </label>
+                  <select
+                    value={allUsersFilters.language}
+                    onChange={(e) => setAllUsersFilters(prev => ({ ...prev, language: e.target.value }))}
+                    className={`w-full px-4 py-2 rounded-lg border ${
+                      isDark 
+                        ? 'bg-gray-700 border-gray-600 text-white' 
+                        : 'bg-white border-gray-300 text-gray-900'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500`}
+                  >
+                    <option value="all">Все</option>
+                    {uniqueLanguages.map(lang => (
+                      <option key={lang} value={lang}>{lang.toUpperCase()}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Level фильтр */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Level
+                  </label>
+                  <select
+                    value={allUsersFilters.level}
+                    onChange={(e) => setAllUsersFilters(prev => ({ ...prev, level: e.target.value }))}
+                    className={`w-full px-4 py-2 rounded-lg border ${
+                      isDark 
+                        ? 'bg-gray-700 border-gray-600 text-white' 
+                        : 'bg-white border-gray-300 text-gray-900'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500`}
+                  >
+                    <option value="all">Все</option>
+                    {uniqueLevels.map(level => (
+                      <option key={level} value={String(level)}>Level {level}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Минимальный ASIC */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    ASIC от
+                  </label>
+                  <input
+                    type="number"
+                    value={allUsersFilters.minAsic}
+                    onChange={(e) => setAllUsersFilters(prev => ({ ...prev, minAsic: e.target.value }))}
+                    placeholder="0"
+                    className={`w-full px-4 py-2 rounded-lg border ${
+                      isDark 
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500`}
+                  />
+                </div>
+
+                {/* Максимальный ASIC */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    ASIC до
+                  </label>
+                  <input
+                    type="number"
+                    value={allUsersFilters.maxAsic}
+                    onChange={(e) => setAllUsersFilters(prev => ({ ...prev, maxAsic: e.target.value }))}
+                    placeholder="∞"
+                    className={`w-full px-4 py-2 rounded-lg border ${
+                      isDark 
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500`}
+                  />
+                </div>
+
+                {/* Минимальный Th */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Th от
+                  </label>
+                  <input
+                    type="number"
+                    value={allUsersFilters.minTh}
+                    onChange={(e) => setAllUsersFilters(prev => ({ ...prev, minTh: e.target.value }))}
+                    placeholder="0"
+                    className={`w-full px-4 py-2 rounded-lg border ${
+                      isDark 
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500`}
+                  />
+                </div>
+
+                {/* Максимальный Th */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Th до
+                  </label>
+                  <input
+                    type="number"
+                    value={allUsersFilters.maxTh}
+                    onChange={(e) => setAllUsersFilters(prev => ({ ...prev, maxTh: e.target.value }))}
+                    placeholder="∞"
+                    className={`w-full px-4 py-2 rounded-lg border ${
+                      isDark 
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500`}
+                  />
+                </div>
+
+                {/* Дата регистрации от */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Дата регистрации от
+                  </label>
+                  <input
+                    type="date"
+                    value={allUsersFilters.dateFrom}
+                    onChange={(e) => setAllUsersFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
+                    className={`w-full px-4 py-2 rounded-lg border ${
+                      isDark 
+                        ? 'bg-gray-700 border-gray-600 text-white' 
+                        : 'bg-white border-gray-300 text-gray-900'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500`}
+                  />
+                </div>
+
+                {/* Дата регистрации до */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Дата регистрации до
+                  </label>
+                  <input
+                    type="date"
+                    value={allUsersFilters.dateTo}
+                    onChange={(e) => setAllUsersFilters(prev => ({ ...prev, dateTo: e.target.value }))}
+                    className={`w-full px-4 py-2 rounded-lg border ${
+                      isDark 
+                        ? 'bg-gray-700 border-gray-600 text-white' 
+                        : 'bg-white border-gray-300 text-gray-900'
+                    } focus:outline-none focus:ring-2 focus:ring-green-500`}
+                  />
+                </div>
+              </div>
+
+              {/* Кнопка сброса фильтров */}
+              <button
+                onClick={() => setAllUsersFilters({
+                  search: '',
+                  ecosPremium: 'all',
+                  tgPremium: 'all',
+                  onboarding: 'all',
+                  language: 'all',
+                  level: 'all',
+                  minAsic: '',
+                  maxAsic: '',
+                  minTh: '',
+                  maxTh: '',
+                  dateFrom: '',
+                  dateTo: ''
+                })}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  isDark
+                    ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                }`}
+              >
+                Сбросить фильтры
+              </button>
+            </div>
+
+            {/* Таблица пользователей */}
+            <div className={`rounded-xl shadow-lg overflow-hidden ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+              <div className="overflow-x-auto">
+                <table className="w-full table-auto">
+                  <thead>
+                    <tr className={`border-b-2 ${isDark ? 'border-gray-700 bg-gray-750' : 'border-gray-200 bg-gray-50'}`}>
+                      <th 
+                        className={`text-left py-2.5 px-3 text-xs font-semibold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-600'}`}
+                        onClick={() => handleSort('person_id')}
+                      >
+                        <div className="flex items-center gap-1">
+                          ID {getSortIcon('person_id')}
+                        </div>
+                      </th>
+                      <th 
+                        className={`text-left py-2.5 px-2 text-xs font-semibold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-600'}`}
+                        onClick={() => handleSort('tg_id')}
+                      >
+                        <div className="flex items-center gap-1">
+                          TG ID {getSortIcon('tg_id')}
+                        </div>
+                      </th>
+                      <th 
+                        className={`text-left py-2.5 px-2 text-xs font-semibold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-600'}`}
+                        onClick={() => handleSort('username')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Username {getSortIcon('username')}
+                        </div>
+                      </th>
+                      <th 
+                        className={`text-left py-2.5 px-2 text-xs font-semibold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-600'}`}
+                        onClick={() => handleSort('first_name')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Имя {getSortIcon('first_name')}
+                        </div>
+                      </th>
+                      <th className={`text-left py-2.5 px-1 text-xs font-semibold uppercase tracking-wider whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                        Wallet
+                      </th>
+                      <th 
+                        className={`text-right py-2.5 px-3 text-xs font-semibold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-600'}`}
+                        onClick={() => handleSort('total_asics')}
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          ASIC {getSortIcon('total_asics')}
+                        </div>
+                      </th>
+                      <th 
+                        className={`text-right py-2.5 px-3 text-xs font-semibold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-600'}`}
+                        onClick={() => handleSort('total_th')}
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          Th {getSortIcon('total_th')}
+                        </div>
+                      </th>
+                      <th 
+                        className={`text-center py-2.5 px-2 text-xs font-semibold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-600'}`}
+                        onClick={() => handleSort('level')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          Level {getSortIcon('level')}
+                        </div>
+                      </th>
+                      <th 
+                        className={`text-center py-2.5 px-2 text-xs font-semibold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-600'}`}
+                        onClick={() => handleSort('is_ecos_premium')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          ECOS Premium {getSortIcon('is_ecos_premium')}
+                        </div>
+                      </th>
+                      <th 
+                        className={`text-center py-2.5 px-2 text-xs font-semibold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-600'}`}
+                        onClick={() => handleSort('tg_premium')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          TG Premium {getSortIcon('tg_premium')}
+                        </div>
+                      </th>
+                      <th 
+                        className={`text-center py-2.5 px-2 text-xs font-semibold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-600'}`}
+                        onClick={() => handleSort('onbording_done')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          Onboarding {getSortIcon('onbording_done')}
+                        </div>
+                      </th>
+                      <th className={`text-center py-2.5 px-3 text-xs font-semibold uppercase tracking-wider whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                        Язык
+                      </th>
+                      <th 
+                        className={`text-left py-2.5 px-3 text-xs font-semibold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap ${isDark ? 'text-gray-300' : 'text-gray-600'}`}
+                        onClick={() => handleSort('person_created_at')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Регистрация {getSortIcon('person_created_at')}
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAndSortedUsers.map((user, index) => {
+                    const formatDate = (dateString: string) => {
+                      if (!dateString) return 'N/A';
+                      try {
+                        const date = new Date(dateString);
+                        return date.toLocaleDateString('ru-RU', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        });
+                      } catch {
+                        return dateString;
+                      }
+                    };
+
+                    return (
+                      <tr
+                        key={user.person_id}
+                        onClick={() => {
+                          console.log('🖱️ Клик по пользователю:', {
+                            person_id: user.person_id,
+                            username: user.username,
+                            index: index
+                          });
+                          loadUserDetails(user.person_id);
+                        }}
+                        className={`border-b transition-all duration-150 cursor-pointer ${
+                          isDark 
+                            ? 'border-gray-700/50 hover:bg-gray-700/30' 
+                            : 'border-gray-100 hover:bg-gray-50'
+                        } ${index % 2 === 0 ? (isDark ? 'bg-gray-800/30' : 'bg-gray-50/30') : ''}`}
+                      >
+                        <td className={`py-2 px-3 text-sm font-mono ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {user.person_id}
+                        </td>
+                        <td className={`py-2 px-2 text-sm font-mono ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {user.tg_id || 'N/A'}
+                        </td>
+                        <td className="py-2 px-2">
+                          <div className="flex items-center gap-1.5">
+                            {user.photo_url && (
+                              <img 
+                                src={user.photo_url} 
+                                alt={user.username}
+                                className="w-5 h-5 rounded-full flex-shrink-0"
+                                onError={(e) => {
+                                  const img = e.target as HTMLImageElement;
+                                  img.style.display = 'none';
+                                  img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="20" height="20"%3E%3C/svg%3E';
+                                }}
+                                loading="lazy"
+                              />
+                            )}
+                            <span className={`text-sm font-medium truncate max-w-[120px] ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
+                              {user.username || 'Unknown'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className={`py-2 px-2 text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <div className="truncate max-w-[140px]" title={`${user.first_name} ${user.last_name}`}>
+                            {user.first_name} {user.last_name}
+                          </div>
+                        </td>
+                        <td className={`py-2 px-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <div className="truncate max-w-[100px] text-xs font-mono" title={user.wallet_address || 'N/A'}>
+                            {user.wallet_address ? `${user.wallet_address.slice(0, 6)}...${user.wallet_address.slice(-4)}` : 'N/A'}
+                          </div>
+                        </td>
+                        <td className={`py-2 px-3 text-right text-sm font-semibold tabular-nums ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                          {numberFormat(user.total_asics || 0)}
+                        </td>
+                        <td className={`py-2 px-3 text-right text-sm font-semibold tabular-nums ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                          {numberFormat(user.total_th || 0)} <span className="text-xs opacity-70">Th</span>
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          {user.level !== null ? (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                              user.level === 0 
+                                ? isDark ? 'bg-gray-700/50 text-gray-300 border border-gray-600' : 'bg-gray-100 text-gray-700 border border-gray-200'
+                                : user.level <= 3
+                                ? isDark ? 'bg-blue-900/50 text-blue-300 border border-blue-700' : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                : user.level <= 6
+                                ? isDark ? 'bg-purple-900/50 text-purple-300 border border-purple-700' : 'bg-purple-100 text-purple-800 border border-purple-200'
+                                : user.level <= 8
+                                ? isDark ? 'bg-orange-900/50 text-orange-300 border border-orange-700' : 'bg-orange-100 text-orange-800 border border-orange-200'
+                                : isDark ? 'bg-red-900/50 text-red-300 border border-red-700' : 'bg-red-100 text-red-800 border border-red-200'
+                            }`}>
+                              {user.level}
+                            </span>
+                          ) : (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-gray-700/50 text-gray-400 border border-gray-600' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
+                              —
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          {user.is_ecos_premium ? (
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-green-900/50 text-green-300 border border-green-700' : 'bg-green-100 text-green-800 border border-green-200'}`}>
+                              ✓
+                            </span>
+                          ) : (
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-gray-700/50 text-gray-400 border border-gray-600' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
+                              —
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          {user.tg_premium ? (
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-blue-900/50 text-blue-300 border border-blue-700' : 'bg-blue-100 text-blue-800 border border-blue-200'}`}>
+                              ✓
+                            </span>
+                          ) : (
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-gray-700/50 text-gray-400 border border-gray-600' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
+                              —
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          {user.onbording_done ? (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-green-900/50 text-green-300 border border-green-700' : 'bg-green-100 text-green-800 border border-green-200'}`}>
+                              ✓
+                            </span>
+                          ) : (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-yellow-900/50 text-yellow-300 border border-yellow-700' : 'bg-yellow-100 text-yellow-800 border border-yellow-200'}`}>
+                              ⚠
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                            user.person_language === 'ru' || user.tg_language === 'ru'
+                              ? isDark ? 'bg-blue-900/50 text-blue-300 border border-blue-700' : 'bg-blue-100 text-blue-800 border border-blue-200'
+                              : isDark ? 'bg-gray-700/50 text-gray-400 border border-gray-600' : 'bg-gray-100 text-gray-600 border border-gray-200'
+                          }`}>
+                            {(user.person_language || user.tg_language || 'N/A').toUpperCase()}
+                          </span>
+                        </td>
+                        <td className={`py-2 px-3 text-xs tabular-nums ${isDark ? 'text-gray-400' : 'text-gray-600'} whitespace-nowrap`}>
+                          {formatDate(user.person_created_at)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Модальное окно с пользователями уровня */}
       {levelUsersModal && (
         <div 
@@ -4525,6 +6198,410 @@ const Dashboard: React.FC = () => {
                 </>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* Модальное окно с деталями пользователя */}
+      {userDetails && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 pt-12 pb-32 overflow-y-auto"
+          onClick={() => setUserDetails(null)}
+        >
+          <div 
+            className={`max-w-6xl w-full rounded-xl shadow-2xl p-6 mb-8 ${isDark ? 'bg-gray-800' : 'bg-white'}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Заголовок модального окна */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">👤</span>
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    Детали пользователя
+                  </h3>
+                  {userDetails.user && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {userDetails.user.username || userDetails.user.first_name || `ID: ${userDetails.user.person_id}`}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => setUserDetails(null)}
+                className={`p-2 rounded-lg transition-colors ${
+                  isDark 
+                    ? 'hover:bg-gray-700 text-gray-300' 
+                    : 'hover:bg-gray-100 text-gray-600'
+                }`}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Контент модального окна */}
+            {userDetails.loading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+              </div>
+            ) : userDetails.user ? (
+              <div className="space-y-6">
+                {/* Основная информация */}
+                <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                  <h4 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Основная информация</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Person ID</p>
+                      <p className={`font-mono ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>{userDetails.user.person_id}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">TG ID</p>
+                      <p className={`font-mono ${isDark ? 'text-gray-300' : 'text-gray-900'}`}>{userDetails.user.tg_id || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Username</p>
+                      <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{userDetails.user.username || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Имя</p>
+                      <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{userDetails.user.first_name || 'N/A'} {userDetails.user.last_name || ''}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Level</p>
+                      <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{userDetails.user.level !== null ? userDetails.user.level : 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">ASIC</p>
+                      <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{numberFormat(userDetails.user.total_asics || 0)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Th</p>
+                      <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{numberFormat(userDetails.user.total_th || 0)} Th</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Effective Th/s</p>
+                      <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{numberFormat(userDetails.user.effective_ths || 0)} Th/s</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Progress</p>
+                      <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>
+                        {userDetails.user.progress_cached ? `${(userDetails.user.progress_cached * 100).toFixed(2)}%` : 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Баланс */}
+                {userDetails.user.total_balance !== undefined && (
+                  <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                    <h4 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Баланс</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Общий баланс</p>
+                        <p className={`font-semibold ${isDark ? 'text-green-400' : 'text-green-600'}`}>
+                          {numberFormat(userDetails.user.total_balance || 0)}
+                        </p>
+                      </div>
+                      {userDetails.user.balance_by_asset && Object.keys(userDetails.user.balance_by_asset).map((assetId) => {
+                        const assetNameRaw = userDetails.user.assets_metadata?.[assetId]?.name || `Asset ${assetId}`;
+                        const assetName = assetNameRaw === 'ECOScoin' ? 'XP' : assetNameRaw;
+                        const balance = userDetails.user.balance_by_asset[assetId];
+                        return (
+                          <div key={assetId}>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{assetName}</p>
+                            <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{numberFormat(balance || 0)}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* История баланса */}
+                {userDetails.user.balance_history && (
+                  <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                    <h4 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">История баланса</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Net</p>
+                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{numberFormat(userDetails.user.balance_history.net || 0)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total In</p>
+                        <p className={`${isDark ? 'text-green-400' : 'text-green-600'}`}>{numberFormat(userDetails.user.balance_history.total_in || 0)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total Out</p>
+                        <p className={`${isDark ? 'text-red-400' : 'text-red-600'}`}>{numberFormat(userDetails.user.balance_history.total_out || 0)}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Майнинг */}
+                {userDetails.user.mining_summary && (
+                  <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                    <h4 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Майнинг</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Сессий</p>
+                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{userDetails.user.mining_summary.sessions_count || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Энергия (kWh)</p>
+                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{numberFormat(userDetails.user.mining_summary.total_energy_kwh || 0)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Effective Th/s</p>
+                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{numberFormat(userDetails.user.mining_summary.total_effective_ths || 0)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Estimated BTC</p>
+                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{userDetails.user.mining_summary.total_estimated_btc || 0}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Рефералы */}
+                {userDetails.user.total_referrals !== undefined && (() => {
+                  // Получаем информацию о рефералах из allUsersData
+                  const refereesList = (() => {
+                    if (!userDetails.user.referees || !Array.isArray(userDetails.user.referees) || userDetails.user.referees.length === 0) {
+                      return [];
+                    }
+                    
+                    if (!allUsersData || !allUsersData.users) {
+                      return userDetails.user.referees.map((ref: any) => ({
+                        referee_id: ref.referee_id,
+                        joined_at: ref.joined_at,
+                        username: null,
+                        first_name: null,
+                        last_name: null,
+                        level: null,
+                        total_asics: null,
+                        total_th: null
+                      }));
+                    }
+                    
+                    // Ищем информацию о каждом реферале в allUsersData
+                    return userDetails.user.referees.map((ref: any) => {
+                      const refereeInfo = allUsersData.users.find((u: any) => u.person_id === ref.referee_id);
+                      return {
+                        referee_id: ref.referee_id,
+                        joined_at: ref.joined_at,
+                        username: refereeInfo?.username || null,
+                        first_name: refereeInfo?.first_name || null,
+                        last_name: refereeInfo?.last_name || null,
+                        level: refereeInfo?.level !== undefined ? refereeInfo.level : null,
+                        total_asics: refereeInfo?.total_asics || null,
+                        total_th: refereeInfo?.total_th || null,
+                        photo_url: refereeInfo?.photo_url || null
+                      };
+                    });
+                  })();
+                  
+                  return (
+                    <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                      <h4 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+                        Рефералы ({userDetails.user.total_referrals || 0})
+                      </h4>
+                      
+                      {refereesList.length > 0 ? (
+                        <div className="space-y-3">
+                          <div className="overflow-x-auto">
+                            <table className="w-full">
+                              <thead>
+                                <tr className={`border-b ${isDark ? 'border-gray-600' : 'border-gray-200'}`}>
+                                  <th className={`text-left py-2 px-3 text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    ID
+                                  </th>
+                                  <th className={`text-left py-2 px-3 text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    Пользователь
+                                  </th>
+                                  <th className={`text-center py-2 px-3 text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    Level
+                                  </th>
+                                  <th className={`text-right py-2 px-3 text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    ASIC
+                                  </th>
+                                  <th className={`text-right py-2 px-3 text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    Th
+                                  </th>
+                                  <th className={`text-left py-2 px-3 text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    Дата регистрации
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {refereesList.map((referee: any, index: number) => (
+                                  <tr 
+                                    key={referee.referee_id || index}
+                                    className={`border-b transition-colors ${
+                                      isDark 
+                                        ? 'border-gray-700/50 hover:bg-gray-700/30' 
+                                        : 'border-gray-100 hover:bg-gray-50'
+                                    } ${index % 2 === 0 ? (isDark ? 'bg-gray-800/30' : 'bg-gray-50/30') : ''}`}
+                                  >
+                                    <td className={`py-2 px-3 text-sm font-mono ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                      {referee.referee_id}
+                                    </td>
+                                    <td className="py-2 px-3">
+                                      <div className="flex items-center gap-2">
+                                        {referee.photo_url && (
+                                          <img 
+                                            src={referee.photo_url} 
+                                            alt={referee.username || 'User'}
+                                            className="w-6 h-6 rounded-full flex-shrink-0"
+                                            onError={(e) => {
+                                              const img = e.target as HTMLImageElement;
+                                              img.style.display = 'none';
+                                            }}
+                                            loading="lazy"
+                                          />
+                                        )}
+                                        <div className="min-w-0">
+                                          <p className={`text-sm font-medium truncate ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
+                                            {referee.username || 'Unknown'}
+                                          </p>
+                                          {(referee.first_name || referee.last_name) && (
+                                            <p className={`text-xs truncate ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                              {referee.first_name} {referee.last_name}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-3 text-center">
+                                      {referee.level !== null ? (
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                                          referee.level === 0 
+                                            ? isDark ? 'bg-gray-700/50 text-gray-300 border border-gray-600' : 'bg-gray-100 text-gray-700 border border-gray-200'
+                                            : referee.level <= 3
+                                            ? isDark ? 'bg-blue-900/50 text-blue-300 border border-blue-700' : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                            : referee.level <= 6
+                                            ? isDark ? 'bg-purple-900/50 text-purple-300 border border-purple-700' : 'bg-purple-100 text-purple-800 border border-purple-200'
+                                            : referee.level <= 8
+                                            ? isDark ? 'bg-orange-900/50 text-orange-300 border border-orange-700' : 'bg-orange-100 text-orange-800 border border-orange-200'
+                                            : isDark ? 'bg-red-900/50 text-red-300 border border-red-700' : 'bg-red-100 text-red-800 border border-red-200'
+                                        }`}>
+                                          {referee.level}
+                                        </span>
+                                      ) : (
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isDark ? 'bg-gray-700/50 text-gray-400 border border-gray-600' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
+                                          —
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className={`py-2 px-3 text-right text-sm font-semibold tabular-nums ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                                      {referee.total_asics !== null ? numberFormat(referee.total_asics) : '—'}
+                                    </td>
+                                    <td className={`py-2 px-3 text-right text-sm font-semibold tabular-nums ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                                      {referee.total_th !== null ? `${numberFormat(referee.total_th)} Th` : '—'}
+                                    </td>
+                                    <td className={`py-2 px-3 text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                      {referee.joined_at 
+                                        ? new Date(referee.joined_at).toLocaleDateString('ru-RU', {
+                                            year: 'numeric',
+                                            month: '2-digit',
+                                            day: '2-digit',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                          })
+                                        : 'N/A'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-4">
+                          <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Нет приглашенных пользователей
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Заказы */}
+                {userDetails.user.total_orders !== undefined && (
+                  <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                    <h4 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Заказы</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Всего заказов</p>
+                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{userDetails.user.total_orders || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Потрачено Points</p>
+                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{numberFormat(userDetails.user.total_points_spent || 0)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Потрачено TON</p>
+                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{numberFormat(userDetails.user.total_ton_spent || 0)}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Последняя транзакция */}
+                {userDetails.user.last_transaction && (
+                  <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                    <h4 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Последняя транзакция</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Тип</p>
+                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{userDetails.user.last_transaction.operation_type || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Значение</p>
+                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{numberFormat(userDetails.user.last_transaction.value || 0)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Дата</p>
+                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>
+                          {userDetails.user.last_transaction.created_at 
+                            ? new Date(userDetails.user.last_transaction.created_at).toLocaleDateString('ru-RU', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
+                            : 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Asset ID</p>
+                        <p className={isDark ? 'text-gray-300' : 'text-gray-900'}>{userDetails.user.last_transaction.asset_id || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* JSON для отладки (можно скрыть в продакшене) */}
+                <details className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                  <summary className="cursor-pointer text-sm font-semibold text-gray-500 dark:text-gray-400 mb-2">
+                    Полные данные (JSON)
+                  </summary>
+                  <pre className={`text-xs overflow-auto max-h-96 p-4 rounded ${isDark ? 'bg-gray-900 text-gray-300' : 'bg-gray-100 text-gray-800'}`}>
+                    {JSON.stringify(userDetails.user, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <p className={`text-lg ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Не удалось загрузить данные пользователя
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -122,7 +122,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user]);
 
-  // Дополнительный useEffect для синхронизации с localStorage
   useEffect(() => {
     const checkAuthStatus = () => {
       const isAuth = localStorage.getItem('dashecos_is_authenticated') === 'true';
@@ -193,7 +192,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.location.reload();
   };
 
-  const register = async (email: string, password: string, name: string, role: UserRole): Promise<boolean> => {
+  const register = async (email: string, _password: string, name: string, role: UserRole): Promise<boolean> => {
     // Имитация API запроса
     await new Promise(resolve => setTimeout(resolve, 1000));
     
@@ -333,7 +332,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Ошибка при загрузке профиля:', error);
     }
-  }, []);
+  }, [user]);
 
   return (
     <AuthContext.Provider value={{
