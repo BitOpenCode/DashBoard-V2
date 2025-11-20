@@ -165,6 +165,36 @@ const Dashboard: React.FC = () => {
   } | null>(null);
   const [kpiLoading, setKpiLoading] = useState<boolean>(false);
   const [selectedKpiLevel, setSelectedKpiLevel] = useState<number | null>(null);
+  const [asicKpiData, setAsicKpiData] = useState<Array<{
+    person_id: number;
+    tg_id: string;
+    username: string;
+    first_name: string;
+    last_name: string;
+    current_level: number;
+    effective_ths: string;
+    total_asics: number;
+    required_asics_for_next_level: number;
+    missing_asics: number;
+    progress_percent: number;
+    person_created_at: string;
+    tg_photo_url: string;
+  }> | null>(null);
+  const [asicKpiLoading, setAsicKpiLoading] = useState<boolean>(false);
+  const [refKpiData, setRefKpiData] = useState<Array<{
+    person_id: number;
+    tg_id: string;
+    username: string;
+    first_name: string;
+    last_name: string;
+    current_level: number;
+    effective_ths: string;
+    total_asics: number;
+    total_referrals: number;
+    person_created_at: string;
+    tg_photo_url: string;
+  }> | null>(null);
+  const [refKpiLoading, setRefKpiLoading] = useState<boolean>(false);
   const [allUsersData, setAllUsersData] = useState<{
     users: Array<{
       person_id: number;
@@ -336,6 +366,8 @@ const Dashboard: React.FC = () => {
     setPoolsData(null);
     setKpiData(null);
     setAllUsersData(null);
+    setUserDetails(null);
+    setUserTransactions(null);
     
     try {
       // Используем относительный путь для прокси (на production будет полный URL)
@@ -473,6 +505,8 @@ const Dashboard: React.FC = () => {
     setPoolsData(null);
     setKpiData(null);
     setAllUsersData(null);
+    setUserDetails(null);
+    setUserTransactions(null);
     
     try {
       const webhookUrl = import.meta.env.DEV 
@@ -544,6 +578,8 @@ const Dashboard: React.FC = () => {
     setPoolsData(null);
     setKpiData(null);
     setAllUsersData(null);
+    setUserDetails(null);
+    setUserTransactions(null);
     
     try {
       const webhookUrl = import.meta.env.DEV 
@@ -616,6 +652,8 @@ const Dashboard: React.FC = () => {
     setPoolsData(null);
     setKpiData(null);
     setAllUsersData(null);
+    setUserDetails(null);
+    setUserTransactions(null);
     
     try {
       const webhookUrl = import.meta.env.DEV 
@@ -725,6 +763,8 @@ const Dashboard: React.FC = () => {
     setPoolsData(null);
     setKpiData(null);
     setAllUsersData(null);
+    setUserDetails(null);
+    setUserTransactions(null);
     
     try {
       const webhookUrl = import.meta.env.DEV 
@@ -840,6 +880,8 @@ const Dashboard: React.FC = () => {
     setPoolsData(null);
     setKpiData(null);
     setAllUsersData(null);
+    setUserDetails(null);
+    setUserTransactions(null);
     
     try {
       const webhookUrl = import.meta.env.DEV 
@@ -935,6 +977,8 @@ const Dashboard: React.FC = () => {
     setLeadersData(null);
     setKpiData(null);
     setAllUsersData(null);
+    setUserDetails(null);
+    setUserTransactions(null);
     
     try {
       const webhookUrl = import.meta.env.DEV 
@@ -1027,6 +1071,281 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const loadAsicKpiData = async (level?: number | null) => {
+    console.log('🚀 loadAsicKpiData вызвана для уровня:', level);
+    setAsicKpiLoading(true);
+    setAsicKpiData(null);
+    
+    // Используем переданный уровень или выбранный уровень из состояния
+    const targetLevel = level !== undefined ? level : selectedKpiLevel;
+    
+    try {
+      // Добавляем параметр уровня в URL, если он указан
+      let webhookUrl = import.meta.env.DEV 
+        ? '/webhook/game-kpi1'
+        : 'https://n8n-p.blc.am/webhook/game-kpi1';
+      
+      if (targetLevel !== null && targetLevel !== undefined) {
+        webhookUrl += `?level=${targetLevel}`;
+      }
+      
+      console.log('🔗 Загрузка ASIC KPI данных с:', webhookUrl);
+      
+      const response = await fetch(webhookUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      let data = await response.json();
+      console.log('📊 Полученные ASIC KPI данные (RAW):', data);
+      console.log('📊 Тип данных:', typeof data);
+      console.log('📊 Является массивом:', Array.isArray(data));
+      
+      // Если webhook с responseMode: "lastNode" вернул только последний элемент массива,
+      // нужно проверить, есть ли способ получить весь массив
+      // Попробуем проверить, является ли это массивом объектов с json полем
+      if (!Array.isArray(data) && data && typeof data === 'object' && data.json) {
+        // Если это один объект с полем json, возможно это последний элемент
+        // Но нам нужен весь массив - возможно данные приходят в другом формате
+        console.log('⚠️ Получен один объект вместо массива, проверяем структуру...');
+      }
+      
+      // Обрабатываем данные в зависимости от формата ответа
+      let usersList: any[] = [];
+      
+      // Если это массив напрямую
+      if (Array.isArray(data)) {
+        // Проверяем, является ли это массивом объектов с полем json (формат n8n)
+        if (data.length > 0 && data[0] && typeof data[0] === 'object' && data[0].json) {
+          // Это массив объектов вида [{json: {...}}, {json: {...}}]
+          usersList = data.map((item: any) => item.json || item);
+          console.log('✅ Данные - массив объектов с json полем, длина:', usersList.length);
+        } else {
+          // Это обычный массив пользователей
+          usersList = data;
+          console.log('✅ Данные - массив пользователей, длина:', usersList.length);
+        }
+      } 
+      // Если это объект
+      else if (data && typeof data === 'object') {
+        // Проверяем различные варианты структуры
+        if (data.rows && Array.isArray(data.rows)) {
+          usersList = data.rows;
+          console.log('✅ Данные - объект с rows, длина:', usersList.length);
+        } else if (data.result && Array.isArray(data.result)) {
+          usersList = data.result;
+          console.log('✅ Данные - объект с result, длина:', usersList.length);
+        } else if (data.users && Array.isArray(data.users)) {
+          usersList = data.users;
+          console.log('✅ Данные - объект с users, длина:', usersList.length);
+        } else if (data.count !== undefined && data.users && Array.isArray(data.users)) {
+          // Если данные пришли как {users: [...], count: ...}
+          usersList = data.users;
+          console.log('✅ Данные - объект с users и count, длина:', usersList.length);
+        } else if (data.data && Array.isArray(data.data)) {
+          usersList = data.data;
+          console.log('✅ Данные - объект с data, длина:', usersList.length);
+        } else if (Array.isArray(data.json)) {
+          // Если данные пришли как массив объектов с полем json
+          usersList = data.json.map((item: any) => item.json || item);
+          console.log('✅ Данные - объект с json массивом, длина:', usersList.length);
+        } else if (data.person_id !== undefined) {
+          // Если это один объект пользователя (не массив)
+          usersList = [data];
+          console.log('✅ Данные - один объект пользователя, добавлен в массив');
+        } else if (data.json && typeof data.json === 'object') {
+          if (Array.isArray(data.json)) {
+            // Если json - это массив
+            usersList = data.json.map((item: any) => (item.json || item));
+            console.log('✅ Данные - объект с json массивом, длина:', usersList.length);
+          } else if (data.json.person_id !== undefined) {
+            // Если данные обернуты в { json: {...} } (один пользователь)
+            usersList = [data.json];
+            console.log('✅ Данные - объект с json полем (один пользователь), добавлен в массив');
+          }
+        }
+      }
+      
+      console.log('📊 Извлечено пользователей:', usersList.length);
+      if (usersList.length > 0) {
+        console.log('📊 Первый пользователь:', usersList[0]);
+      }
+      
+      // Фильтруем по выбранному уровню, если он указан
+      let filteredUsers = usersList;
+      if (targetLevel !== null && targetLevel !== undefined) {
+        filteredUsers = usersList.filter((user: any) => {
+          const userLevel = typeof user.current_level === 'string' 
+            ? parseInt(user.current_level, 10) 
+            : parseInt(user.current_level);
+          return userLevel === targetLevel;
+        });
+        console.log(`📊 Отфильтровано по уровню ${targetLevel}:`, filteredUsers.length, 'пользователей');
+      }
+      
+      // Преобразуем строковые значения в числа
+      const formattedUsers = filteredUsers.map((user: any) => ({
+        person_id: typeof user.person_id === 'string' ? parseInt(user.person_id, 10) || 0 : parseInt(user.person_id) || 0,
+        tg_id: String(user.tg_id || ''),
+        username: String(user.username || ''),
+        first_name: String(user.first_name || ''),
+        last_name: String(user.last_name || ''),
+        current_level: typeof user.current_level === 'string' ? parseInt(user.current_level, 10) || 0 : parseInt(user.current_level) || 0,
+        effective_ths: String(user.effective_ths || '0'),
+        total_asics: typeof user.total_asics === 'string' ? parseInt(user.total_asics, 10) || 0 : parseInt(user.total_asics) || 0,
+        required_asics_for_next_level: typeof user.required_asics_for_next_level === 'string' ? parseInt(user.required_asics_for_next_level, 10) || null : parseInt(user.required_asics_for_next_level) || null,
+        missing_asics: typeof user.missing_asics === 'string' ? parseInt(user.missing_asics, 10) || 0 : parseInt(user.missing_asics) || 0,
+        progress_percent: typeof user.progress_percent === 'string' ? parseFloat(user.progress_percent) || 0 : parseFloat(user.progress_percent) || 0,
+        person_created_at: user.person_created_at || null,
+        tg_photo_url: user.tg_photo_url || null
+      }));
+      
+      setAsicKpiData(formattedUsers);
+      console.log('✅ ASIC KPI данные загружены:', formattedUsers.length, 'пользователей');
+    } catch (e: any) {
+      console.error('❌ Ошибка загрузки ASIC KPI данных:', e);
+      setAsicKpiData([]);
+    } finally {
+      setAsicKpiLoading(false);
+    }
+  };
+
+  const loadRefKpiData = async (level?: number | null) => {
+    console.log('🚀 loadRefKpiData вызвана для уровня:', level);
+    setRefKpiLoading(true);
+    setRefKpiData(null);
+    
+    // Используем переданный уровень или выбранный уровень из состояния
+    const targetLevel = level !== undefined ? level : selectedKpiLevel;
+    
+    try {
+      // Webhook возвращает всех пользователей без рефералов, фильтрация по уровню на фронтенде
+      let webhookUrl = import.meta.env.DEV 
+        ? '/webhook/game-kpi-1ref'
+        : 'https://n8n-p.blc.am/webhook/game-kpi-1ref';
+      
+      console.log('🔗 Загрузка Ref KPI данных с:', webhookUrl);
+      
+      const response = await fetch(webhookUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      let data = await response.json();
+      console.log('📊 Полученные Ref KPI данные (RAW):', data);
+      console.log('📊 Тип данных:', typeof data);
+      console.log('📊 Является массивом:', Array.isArray(data));
+      
+      // Обрабатываем данные в зависимости от формата ответа
+      let usersList: any[] = [];
+      
+      // Если это массив напрямую
+      if (Array.isArray(data)) {
+        // Проверяем, является ли это массивом объектов с полем json (формат n8n)
+        if (data.length > 0 && data[0] && typeof data[0] === 'object' && data[0].json) {
+          // Это массив объектов вида [{json: {...}}, {json: {...}}]
+          usersList = data.map((item: any) => item.json || item);
+          console.log('✅ Данные - массив объектов с json полем, длина:', usersList.length);
+        } else {
+          // Это обычный массив пользователей
+          usersList = data;
+          console.log('✅ Данные - массив пользователей, длина:', usersList.length);
+        }
+      } 
+      // Если это объект
+      else if (data && typeof data === 'object') {
+        // Проверяем различные варианты структуры
+        if (data.rows && Array.isArray(data.rows)) {
+          usersList = data.rows;
+          console.log('✅ Данные - объект с rows, длина:', usersList.length);
+        } else if (data.result && Array.isArray(data.result)) {
+          usersList = data.result;
+          console.log('✅ Данные - объект с result, длина:', usersList.length);
+        } else if (data.users && Array.isArray(data.users)) {
+          usersList = data.users;
+          console.log('✅ Данные - объект с users, длина:', usersList.length);
+        } else if (data.count !== undefined && data.users && Array.isArray(data.users)) {
+          // Если данные пришли как {users: [...], count: ...}
+          usersList = data.users;
+          console.log('✅ Данные - объект с users и count, длина:', usersList.length);
+        } else if (data.data && Array.isArray(data.data)) {
+          usersList = data.data;
+          console.log('✅ Данные - объект с data, длина:', usersList.length);
+        } else if (Array.isArray(data.json)) {
+          // Если данные пришли как массив объектов с полем json
+          usersList = data.json.map((item: any) => item.json || item);
+          console.log('✅ Данные - объект с json массивом, длина:', usersList.length);
+        } else if (data.person_id !== undefined) {
+          // Если это один объект пользователя (не массив)
+          usersList = [data];
+          console.log('✅ Данные - один объект пользователя, добавлен в массив');
+        } else if (data.json && typeof data.json === 'object') {
+          if (Array.isArray(data.json)) {
+            // Если json - это массив
+            usersList = data.json.map((item: any) => (item.json || item));
+            console.log('✅ Данные - объект с json массивом, длина:', usersList.length);
+          } else if (data.json.person_id !== undefined) {
+            // Если данные обернуты в { json: {...} } (один пользователь)
+            usersList = [data.json];
+            console.log('✅ Данные - объект с json полем (один пользователь), добавлен в массив');
+          }
+        }
+      }
+      
+      console.log('📊 Извлечено пользователей:', usersList.length);
+      if (usersList.length > 0) {
+        console.log('📊 Первый пользователь:', usersList[0]);
+      }
+      
+      // Фильтруем по выбранному уровню на фронтенде
+      let filteredUsers = usersList;
+      if (targetLevel !== null && targetLevel !== undefined) {
+        filteredUsers = usersList.filter((user: any) => {
+          const userLevel = typeof user.current_level === 'string' 
+            ? parseInt(user.current_level, 10) 
+            : parseInt(user.current_level);
+          return userLevel === targetLevel;
+        });
+        console.log(`📊 Отфильтровано по уровню ${targetLevel}:`, filteredUsers.length, 'пользователей');
+      }
+      
+      // Преобразуем строковые значения в числа
+      const formattedUsers = filteredUsers.map((user: any) => ({
+        person_id: typeof user.person_id === 'string' ? parseInt(user.person_id, 10) || 0 : parseInt(user.person_id) || 0,
+        tg_id: String(user.tg_id || ''),
+        username: String(user.username || ''),
+        first_name: String(user.first_name || ''),
+        last_name: String(user.last_name || ''),
+        current_level: typeof user.current_level === 'string' ? parseInt(user.current_level, 10) || 0 : parseInt(user.current_level) || 0,
+        effective_ths: String(user.effective_ths || '0'),
+        total_asics: typeof user.total_asics === 'string' ? parseInt(user.total_asics, 10) || 0 : parseInt(user.total_asics) || 0,
+        total_referrals: typeof user.total_referrals === 'string' ? parseInt(user.total_referrals, 10) || 0 : parseInt(user.total_referrals) || 0,
+        person_created_at: user.person_created_at || null,
+        tg_photo_url: user.tg_photo_url || null
+      }));
+      
+      setRefKpiData(formattedUsers);
+      console.log('✅ Ref KPI данные загружены:', formattedUsers.length, 'пользователей');
+    } catch (e: any) {
+      console.error('❌ Ошибка загрузки Ref KPI данных:', e);
+      setRefKpiData([]);
+    } finally {
+      setRefKpiLoading(false);
+    }
+  };
+
   const loadKpiData = async () => {
     console.log('🚀 loadKpiData вызвана');
     setKpiLoading(true);
@@ -1041,6 +1360,9 @@ const Dashboard: React.FC = () => {
     setLeadersData(null);
     setPoolsData(null);
     setKpiData(null); // Сбрасываем предыдущие данные
+    setAllUsersData(null);
+    setUserDetails(null);
+    setUserTransactions(null);
     
     try {
       const webhookUrl = import.meta.env.DEV 
@@ -2488,6 +2810,11 @@ const Dashboard: React.FC = () => {
 
   // Функция для прокрутки к категории
   const scrollToCategory = (categoryName: string) => {
+    // Скрываем All Users Info при переключении на другие секции
+    setAllUsersData(null);
+    setUserDetails(null);
+    setUserTransactions(null);
+    
     const element = categoryRefs.current[categoryName];
     if (element) {
       const yOffset = -100; // Отступ сверху для навигации
@@ -5473,7 +5800,12 @@ const Dashboard: React.FC = () => {
                 return (
                   <div
                     key={level}
-                    onClick={() => setSelectedKpiLevel(isSelected ? null : level)}
+                    onClick={() => {
+                      setSelectedKpiLevel(isSelected ? null : level);
+                      // Скрываем ASIC KPI и Ref KPI данные при переключении на другой уровень
+                      setAsicKpiData(null);
+                      setRefKpiData(null);
+                    }}
                     className={`p-4 rounded-xl shadow-lg cursor-pointer transition-all hover:shadow-xl border-2 ${
                       isSelected
                         ? isDark
@@ -5525,7 +5857,12 @@ const Dashboard: React.FC = () => {
                   Уровень {selectedKpiLevel} - Детальная информация
                 </h3>
                 <button
-                  onClick={() => setSelectedKpiLevel(null)}
+                  onClick={() => {
+                    setSelectedKpiLevel(null);
+                    // Скрываем ASIC KPI и Ref KPI данные при закрытии детального окна
+                    setAsicKpiData(null);
+                    setRefKpiData(null);
+                  }}
                   className={`px-4 py-2 rounded-lg ${isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} transition-colors`}
                 >
                   Свернуть
@@ -5550,21 +5887,309 @@ const Dashboard: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    <div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <button
                         onClick={() => {
-                          // TODO: Загрузить детальный список пользователей уровня
-                          console.log('Загрузка пользователей уровня', selectedKpiLevel);
+                          loadAsicKpiData(selectedKpiLevel);
                         }}
-                        className={`w-full px-4 py-3 rounded-lg font-medium transition-colors ${
-                          isDark
+                        disabled={asicKpiLoading}
+                        className={`px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                          asicKpiLoading
+                            ? 'bg-gray-500 cursor-not-allowed text-white'
+                            : isDark
                             ? 'bg-purple-700 hover:bg-purple-600 text-white'
                             : 'bg-purple-600 hover:bg-purple-700 text-white'
                         }`}
                       >
-                        Показать всех пользователей уровня {selectedKpiLevel}
+                        {asicKpiLoading ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Загрузка...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            <span>KPI 1 ASIC till level up</span>
+                          </>
+                        )}
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          loadRefKpiData(selectedKpiLevel);
+                        }}
+                        disabled={refKpiLoading}
+                        className={`px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                          refKpiLoading
+                            ? 'bg-gray-500 cursor-not-allowed text-white'
+                            : isDark
+                            ? 'bg-blue-700 hover:bg-blue-600 text-white'
+                            : 'bg-blue-600 hover:bg-blue-700 text-white'
+                        }`}
+                      >
+                        {refKpiLoading ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Загрузка...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            <span>KPI 1 ref</span>
+                          </>
+                        )}
                       </button>
                     </div>
+                    
+                    {/* ASIC KPI Results */}
+                    {asicKpiData && asicKpiData.length > 0 && (
+                      <div className={`mt-6 p-6 rounded-xl shadow-lg ${isDark ? 'bg-gray-800/50 border border-gray-700' : 'bg-gray-50 border border-gray-200'}`}>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                            Пользователи, которым не хватает 1 ASIC для перехода на следующий уровень
+                          </h3>
+                          <button
+                            onClick={() => setAsicKpiData(null)}
+                            className={`px-3 py-1 rounded text-sm ${
+                              isDark 
+                                ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' 
+                                : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                            }`}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <div className="mb-4">
+                          <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                            Найдено: <span className="font-semibold">{asicKpiData.length}</span> пользователей
+                          </p>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className={`border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+                                <th className={`text-left py-2 px-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>ID</th>
+                                <th className={`text-left py-2 px-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Пользователь</th>
+                                <th className={`text-center py-2 px-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Уровень</th>
+                                <th className={`text-center py-2 px-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>ASIC</th>
+                                <th className={`text-center py-2 px-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Нужно для след. уровня</th>
+                                <th className={`text-center py-2 px-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Не хватает</th>
+                                <th className={`text-center py-2 px-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Прогресс</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {asicKpiData.map((user, idx) => (
+                                <tr 
+                                  key={user.person_id || idx} 
+                                  className={`border-b ${isDark ? 'border-gray-700 hover:bg-gray-700/50' : 'border-gray-200 hover:bg-gray-50'}`}
+                                >
+                                  <td className={`py-2 px-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    {user.person_id}
+                                  </td>
+                                  <td className={`py-2 px-3 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    <div className="flex items-center gap-2">
+                                      {user.tg_photo_url && (
+                                        <img 
+                                          src={user.tg_photo_url} 
+                                          alt={user.username || user.first_name}
+                                          className="w-6 h-6 rounded-full"
+                                          onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                          }}
+                                        />
+                                      )}
+                                      <div>
+                                        <div className="font-medium">{user.first_name} {user.last_name || ''}</div>
+                                        {user.username && (
+                                          <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                            @{user.username}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className={`py-2 px-3 text-center ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                      user.current_level === 0
+                                        ? isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'
+                                        : user.current_level <= 3
+                                        ? isDark ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-800'
+                                        : user.current_level <= 6
+                                        ? isDark ? 'bg-purple-900/50 text-purple-300' : 'bg-purple-100 text-purple-800'
+                                        : isDark ? 'bg-orange-900/50 text-orange-300' : 'bg-orange-100 text-orange-800'
+                                    }`}>
+                                      {user.current_level}
+                                    </span>
+                                  </td>
+                                  <td className={`py-2 px-3 text-center font-semibold ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                                    {user.total_asics || 0}
+                                  </td>
+                                  <td className={`py-2 px-3 text-center ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    {user.required_asics_for_next_level || '—'}
+                                  </td>
+                                  <td className={`py-2 px-3 text-center font-semibold ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+                                    {user.missing_asics || 0}
+                                  </td>
+                                  <td className={`py-2 px-3 text-center ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    <div className="flex items-center gap-2">
+                                      <div className={`flex-1 h-2 rounded-full overflow-hidden ${
+                                        isDark ? 'bg-gray-700' : 'bg-gray-200'
+                                      }`}>
+                                        <div 
+                                          className={`h-full ${
+                                            user.progress_percent >= 100
+                                              ? 'bg-green-500'
+                                              : user.progress_percent >= 75
+                                              ? 'bg-yellow-500'
+                                              : 'bg-orange-500'
+                                          }`}
+                                          style={{ width: `${Math.min(user.progress_percent || 0, 100)}%` }}
+                                        ></div>
+                                      </div>
+                                      <span className="text-xs font-medium min-w-[3rem]">
+                                        {user.progress_percent ? user.progress_percent.toFixed(1) : '0'}%
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Ref KPI Results */}
+                    {refKpiData && refKpiData.length > 0 && (() => {
+                      const formatDate = (dateString: string) => {
+                        if (!dateString) return 'N/A';
+                        try {
+                          const date = new Date(dateString);
+                          return date.toLocaleDateString('ru-RU', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          });
+                        } catch (e) {
+                          return 'N/A';
+                        }
+                      };
+
+                      return (
+                        <div className={`mt-6 p-6 rounded-xl shadow-lg ${isDark ? 'bg-gray-800/50 border border-gray-700' : 'bg-gray-50 border border-gray-200'}`}>
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                              Пользователи на уровне {selectedKpiLevel}, которые еще никого не пригласили
+                            </h3>
+                            <button
+                              onClick={() => setRefKpiData(null)}
+                              className={`px-3 py-1 rounded text-sm ${
+                                isDark 
+                                  ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' 
+                                  : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                              }`}
+                            >
+                              Скрыть
+                            </button>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className={`border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+                                  <th className={`py-2 px-2 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>ID</th>
+                                  <th className={`py-2 px-2 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Аватар</th>
+                                  <th className={`py-2 px-2 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'} max-w-[200px]`}>Имя</th>
+                                  <th className={`py-2 px-2 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'} max-w-[120px]`}>TG ID</th>
+                                  <th className={`py-2 px-2 text-center font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Уровень</th>
+                                  <th className={`py-2 px-2 text-center font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Th</th>
+                                  <th className={`py-2 px-2 text-center font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>ASIC</th>
+                                  <th className={`py-2 px-2 text-center font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Рефералов</th>
+                                  <th className={`py-2 px-2 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Дата регистрации</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {refKpiData.map((user) => (
+                                  <tr 
+                                    key={user.person_id} 
+                                    className={`border-b ${isDark ? 'border-gray-700 hover:bg-gray-800/50' : 'border-gray-200 hover:bg-gray-50'} transition-colors cursor-pointer`}
+                                    onClick={() => loadUserDetails(user.person_id)}
+                                  >
+                                    <td className={`py-2 px-2 font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                      {user.person_id}
+                                    </td>
+                                    <td className="py-2 px-2">
+                                      {user.tg_photo_url ? (
+                                        <img 
+                                          src={user.tg_photo_url} 
+                                          alt={user.username || user.first_name}
+                                          className="w-8 h-8 rounded-full"
+                                          loading="lazy"
+                                          onError={(e) => {
+                                            // Просто скрываем изображение при ошибке, чтобы не было бесконечных попыток загрузки
+                                            const target = e.target as HTMLImageElement;
+                                            target.style.display = 'none';
+                                            // Предотвращаем повторные вызовы onError
+                                            target.onerror = null;
+                                          }}
+                                        />
+                                      ) : (
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                                          <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                            {user.first_name?.[0]?.toUpperCase() || '?'}
+                                          </span>
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td className={`py-2 px-2 ${isDark ? 'text-gray-300' : 'text-gray-700'} max-w-[200px]`}>
+                                      <div className="flex flex-col">
+                                        <span className="font-medium truncate">{user.first_name} {user.last_name}</span>
+                                        {user.username && (
+                                          <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'} truncate`}>@{user.username}</span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className={`py-2 px-2 font-mono text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'} max-w-[120px] truncate`}>
+                                      {user.tg_id || '—'}
+                                    </td>
+                                    <td className={`py-2 px-2 text-center`}>
+                                      <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                        user.current_level === 0
+                                          ? isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'
+                                          : user.current_level <= 3
+                                          ? isDark ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-800'
+                                          : user.current_level <= 6
+                                          ? isDark ? 'bg-purple-900/50 text-purple-300' : 'bg-purple-100 text-purple-800'
+                                          : isDark ? 'bg-orange-900/50 text-orange-300' : 'bg-orange-100 text-orange-800'
+                                      }`}>
+                                        {user.current_level}
+                                      </span>
+                                    </td>
+                                    <td className={`py-2 px-2 text-center font-semibold ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                                      {numberFormat(parseFloat(user.effective_ths || '0'))}
+                                    </td>
+                                    <td className={`py-2 px-2 text-center font-semibold ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                                      {user.total_asics || 0}
+                                    </td>
+                                    <td className={`py-2 px-2 text-center font-semibold ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+                                      {user.total_referrals || 0}
+                                    </td>
+                                    <td className={`py-2 px-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                      {user.person_created_at ? formatDate(user.person_created_at) : '—'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })()}
