@@ -5200,8 +5200,8 @@ const Dashboard: React.FC = () => {
                     <Search className="w-6 h-6 text-orange-500" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-white">Quick Navigation</h3>
-                    <p className="text-sm text-gray-400">Select category to view statistics</p>
+                    <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Quick Navigation</h3>
+                    <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Select category to view statistics</p>
                   </div>
                 </div>
 
@@ -5226,7 +5226,7 @@ const Dashboard: React.FC = () => {
                       className="neu-btn text-left"
                     >
                       <EventIcon name={category.icon} className="w-4 h-4" color={category.color} />
-                      <span className="flex-1 text-xs text-gray-300">{category.name}</span>
+                      <span className={`flex-1 text-xs ${isDark ? 'text-gray-300' : '!text-gray-900'}`}>{category.name}</span>
                       </button>
                     ))}
                 </div>
@@ -5891,8 +5891,8 @@ const Dashboard: React.FC = () => {
             {/* Заголовок модального окна */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <span className="text-3xl">{selectedEventModal.eventInfo.icon}</span>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                <EventIcon name={selectedEventModal.eventInfo.icon} className="w-8 h-8" color={selectedEventModal.eventInfo.color} />
+                <h3 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                   {selectedEventModal.eventInfo.title}
                 </h3>
               </div>
@@ -9520,7 +9520,7 @@ const Dashboard: React.FC = () => {
         </div>
         );
       })()}
-
+      
       {/* Модальное окно сравнительного графика майнинга */}
       {comparisonModalOpen && eventsData && eventsData.events['mining_started'] && eventsData.events['mining_claimed'] && (
         <div 

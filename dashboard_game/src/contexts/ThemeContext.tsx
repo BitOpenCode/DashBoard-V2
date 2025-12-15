@@ -31,11 +31,18 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
   useEffect(() => {
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
+    try {
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      // Используем requestAnimationFrame для предотвращения блокировки UI
+      requestAnimationFrame(() => {
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      });
+    } catch (error) {
+      console.error('Error updating theme:', error);
     }
   }, [isDark]);
 

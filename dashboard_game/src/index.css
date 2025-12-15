@@ -402,6 +402,11 @@
     color: #1a1a1a !important;
   }
 
+  /* Ensure text inside buttons is black in light theme */
+  html:not(.dark) .neu-btn span {
+    color: #1a1a1a !important;
+  }
+
   html:not(.dark) .neu-btn:hover {
     box-shadow: 3px 3px 6px rgb(200, 200, 200),
                 -3px -3px 6px rgb(255, 255, 255) !important;
