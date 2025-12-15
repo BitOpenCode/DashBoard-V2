@@ -84,12 +84,15 @@ const Dashboard: React.FC = () => {
     debug?: any;
   } | null>(null);
   const [eventsLoading, setEventsLoading] = useState<boolean>(false);
+  const [eventsTimeFilter, setEventsTimeFilter] = useState<'all' | '7' | '30'>('all');
   const [selectedEventModal, setSelectedEventModal] = useState<{
     eventName: string;
     eventData: { date: string; count: number }[];
     eventInfo: { title: string; icon: string; color: string };
   } | null>(null);
+  const [modalTimeFilter, setModalTimeFilter] = useState<'all' | '7' | '30'>('all');
   const [comparisonModalOpen, setComparisonModalOpen] = useState(false);
+  const [comparisonTimeFilter, setComparisonTimeFilter] = useState<'all' | '7' | '30'>('all');
   const [referralsData, setReferralsData] = useState<{
     totalInvites: number;
     topReferrers: { username: string; count: number }[];
@@ -3168,37 +3171,321 @@ const Dashboard: React.FC = () => {
     };
   }, [usersData, timeFilter]);
 
-  // Расчет прогноза с useMemo
+  // Расчет прогноза с useMemo - используем исходные дневные данные
   const forecast = useMemo(() => {
-    if (!filteredData || !filteredData.dailyCounts || filteredData.dailyCounts.length < 7) return null;
+    // Всегда используем исходные дневные данные для расчёта
+    if (!usersData || !usersData.dailyCounts || usersData.dailyCounts.length < 7) return null;
 
-    const recentDays = filteredData.dailyCounts.slice(-7); // Последние 7 дней
+    const recentDays = usersData.dailyCounts.slice(-7); // Последние 7 дней
     const values = recentDays.map(day => day.count);
     
-    // Простое линейное приближение
+    // Если все значения нулевые, используем среднее за всё время
+    const allZero = values.every(v => v === 0);
+    if (allZero) {
+      const allValues = usersData.dailyCounts.map(d => d.count);
+      const avg = allValues.reduce((a, b) => a + b, 0) / allValues.length;
+      
+      const forecastData = [];
+      for (let i = 0; i < 7; i++) {
+        const futureDate = new Date();
+        futureDate.setDate(futureDate.getDate() + i + 1);
+        forecastData.push({
+          date: format(futureDate, 'dd.MM.yy'),
+          count: Math.round(avg)
+        });
+      }
+      return forecastData;
+    }
+    
+    // Линейная регрессия (метод наименьших квадратов)
     const n = values.length;
-    const sumX = (n * (n - 1)) / 2;
-    const sumY = values.reduce((a, b) => a + b, 0);
-    const sumXY = values.reduce((sum, y, x) => sum + x * y, 0);
-    const sumXX = (n * (n - 1) * (2 * n - 1)) / 6;
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+    for (let i = 0; i < n; i++) {
+      sumX += i;
+      sumY += values[i];
+      sumXY += i * values[i];
+      sumXX += i * i;
+    }
     
-    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const denominator = n * sumXX - sumX * sumX;
+    if (denominator === 0) {
+      const avg = sumY / n;
+      const forecastData = [];
+      for (let i = 0; i < 7; i++) {
+        const futureDate = new Date();
+        futureDate.setDate(futureDate.getDate() + i + 1);
+        forecastData.push({
+          date: format(futureDate, 'dd.MM.yy'),
+          count: Math.round(avg)
+        });
+      }
+      return forecastData;
+    }
+    
+    const slope = (n * sumXY - sumX * sumY) / denominator;
     const intercept = (sumY - slope * sumX) / n;
+    const avg = sumY / n;
+    const minValue = Math.min(...values);
     
-    // Прогноз на следующие 7 дней
+    // Функция для расчёта прогноза на один день
+    const predictDay = (dayIndex: number): number => {
+      let predictedValue = intercept + slope * dayIndex;
+      // Если прогноз слишком низкий, используем среднее со случайным разбросом
+      if (predictedValue < minValue * 0.5) {
+        predictedValue = avg * (0.8 + Math.random() * 0.4);
+      }
+      return Math.max(1, Math.round(predictedValue));
+    };
+    
     const forecastData = [];
-    for (let i = 0; i < 7; i++) {
-      const predictedValue = Math.max(0, Math.round(intercept + slope * (n + i)));
-      const futureDate = new Date();
-      futureDate.setDate(futureDate.getDate() + i + 1);
-      forecastData.push({
-        date: format(futureDate, 'dd.MM.yy'),
-        count: predictedValue
-      });
+    
+    if (timeFilter === '7') {
+      // Недельный график → прогноз на 3 недели (сумма дней за каждую неделю)
+      for (let week = 0; week < 3; week++) {
+        let weekSum = 0;
+        for (let day = 0; day < 7; day++) {
+          const dayIndex = n + (week * 7) + day;
+          weekSum += predictDay(dayIndex);
+        }
+        
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() + (week * 7) + 1);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        
+        forecastData.push({
+          date: `${format(weekStart, 'dd.MM')}–${format(weekEnd, 'dd.MM')}`,
+          count: weekSum
+        });
+      }
+    } else if (timeFilter === '30') {
+      // Месячный график → прогноз на 3 месяца (сумма дней за каждый месяц)
+      for (let month = 0; month < 3; month++) {
+        let monthSum = 0;
+        for (let day = 0; day < 30; day++) {
+          const dayIndex = n + (month * 30) + day;
+          monthSum += predictDay(dayIndex);
+        }
+        
+        const monthDate = new Date();
+        monthDate.setMonth(monthDate.getMonth() + month + 1);
+        
+        forecastData.push({
+          date: format(monthDate, 'MMM yy', { locale: ru }),
+          count: monthSum
+        });
+      }
+    } else {
+      // Дневной график → прогноз на 7 дней
+      for (let i = 0; i < 7; i++) {
+        const dayIndex = n + i;
+        const predictedValue = predictDay(dayIndex);
+        
+        const futureDate = new Date();
+        futureDate.setDate(futureDate.getDate() + i + 1);
+        
+        forecastData.push({
+          date: format(futureDate, 'dd.MM.yy'),
+          count: predictedValue
+        });
+      }
     }
     
     return forecastData;
-  }, [filteredData]);
+  }, [usersData, timeFilter]);
+
+  // Фильтрованные данные events по времени (по дням / неделям / месяцам)
+  const filteredEventsData = useMemo(() => {
+    if (!eventsData) return null;
+
+    const formatDateDDMMYY = (date: Date) => {
+      const dd = String(date.getUTCDate()).padStart(2, '0');
+      const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const yy = String(date.getUTCFullYear()).slice(-2);
+      return `${dd}.${mm}.${yy}`;
+    };
+
+    // Функция агрегации массива данных
+    const aggregateData = (data: { date: string; count: number }[], filter: 'all' | '7' | '30') => {
+      if (!data || data.length === 0) return [];
+      
+      if (filter === 'all') {
+        return data;
+      } else if (filter === '7') {
+        // Группировка по неделям
+        const sortedDays = [...data].sort((a, b) => {
+          const [dayA, monthA, yearA] = a.date.split('.').map(Number);
+          const [dayB, monthB, yearB] = b.date.split('.').map(Number);
+          const dateA = Date.UTC(2000 + yearA, monthA - 1, dayA);
+          const dateB = Date.UTC(2000 + yearB, monthB - 1, dayB);
+          return dateA - dateB;
+        });
+        
+        if (sortedDays.length === 0) return [];
+        
+        const firstDay = sortedDays[0];
+        const [firstDayStr, firstMonthStr, firstYearStr] = firstDay.date.split('.');
+        const startDate = new Date(Date.UTC(2000 + parseInt(firstYearStr), parseInt(firstMonthStr) - 1, parseInt(firstDayStr), 0, 0, 0, 0));
+        
+        const countsByWeek: { weekStart: Date; weekEnd: Date; count: number }[] = [];
+        
+        sortedDays.forEach(day => {
+          const [dayStr, monthStr, yearStr] = day.date.split('.');
+          const dayDate = new Date(Date.UTC(2000 + parseInt(yearStr), parseInt(monthStr) - 1, parseInt(dayStr), 0, 0, 0, 0));
+          
+          const daysDiff = Math.floor((dayDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+          const weekNumber = Math.floor(daysDiff / 7);
+          
+          const weekStart = new Date(startDate.getTime() + weekNumber * 7 * 24 * 60 * 60 * 1000);
+          const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+          
+          let weekData = countsByWeek.find(w => w.weekStart.getTime() === weekStart.getTime());
+          
+          if (!weekData) {
+            weekData = { weekStart, weekEnd, count: 0 };
+            countsByWeek.push(weekData);
+          }
+          
+          weekData.count += day.count;
+        });
+        
+        return countsByWeek
+          .sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime())
+          .map(data => ({
+            date: `${formatDateDDMMYY(data.weekStart)}–${formatDateDDMMYY(data.weekEnd)}`,
+            count: data.count
+          }));
+      } else if (filter === '30') {
+        // Группировка по месяцам
+        const countsByMonth = new Map<string, number>();
+        
+        data.forEach(day => {
+          const [dayStr, monthStr, yearStr] = day.date.split('.');
+          const dayDate = new Date(2000 + parseInt(yearStr), parseInt(monthStr) - 1, parseInt(dayStr));
+          
+          const mm = String(dayDate.getUTCMonth() + 1).padStart(2, '0');
+          const yy = String(dayDate.getUTCFullYear()).slice(-2);
+          const monthKey = `${mm}.${yy}`;
+          
+          countsByMonth.set(monthKey, (countsByMonth.get(monthKey) || 0) + day.count);
+        });
+        
+        return Array.from(countsByMonth.entries())
+          .map(([month, count]) => {
+            const [mm, yy] = month.split('.').map(Number);
+            const startTime = new Date(2000 + yy, mm - 1, 1).getTime();
+            return { date: month, count, _startTime: startTime };
+          })
+          .sort((a, b) => a._startTime - b._startTime)
+          .map(({ date, count }) => ({ date, count }));
+      }
+      
+      return data;
+    };
+
+    // Агрегируем totalByDay
+    const filteredTotalByDay = aggregateData(eventsData.totalByDay, eventsTimeFilter);
+
+    // Агрегируем каждый event
+    const filteredEvents: { [key: string]: { date: string; count: number }[] } = {};
+    Object.keys(eventsData.events).forEach(eventName => {
+      filteredEvents[eventName] = aggregateData(eventsData.events[eventName], eventsTimeFilter);
+    });
+
+    return {
+      ...eventsData,
+      totalByDay: filteredTotalByDay,
+      events: filteredEvents
+    };
+  }, [eventsData, eventsTimeFilter]);
+
+  // Фильтрованные данные для модального окна
+  const filteredModalData = useMemo(() => {
+    if (!selectedEventModal) return null;
+
+    const formatDateDDMMYY = (date: Date) => {
+      const dd = String(date.getUTCDate()).padStart(2, '0');
+      const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const yy = String(date.getUTCFullYear()).slice(-2);
+      return `${dd}.${mm}.${yy}`;
+    };
+
+    const data = selectedEventModal.eventData;
+    if (!data || data.length === 0) return [];
+
+    if (modalTimeFilter === 'all') {
+      return data;
+    } else if (modalTimeFilter === '7') {
+      // Группировка по неделям
+      const sortedDays = [...data].sort((a, b) => {
+        const [dayA, monthA, yearA] = a.date.split('.').map(Number);
+        const [dayB, monthB, yearB] = b.date.split('.').map(Number);
+        const dateA = Date.UTC(2000 + yearA, monthA - 1, dayA);
+        const dateB = Date.UTC(2000 + yearB, monthB - 1, dayB);
+        return dateA - dateB;
+      });
+      
+      if (sortedDays.length === 0) return [];
+      
+      const firstDay = sortedDays[0];
+      const [firstDayStr, firstMonthStr, firstYearStr] = firstDay.date.split('.');
+      const startDate = new Date(Date.UTC(2000 + parseInt(firstYearStr), parseInt(firstMonthStr) - 1, parseInt(firstDayStr), 0, 0, 0, 0));
+      
+      const countsByWeek: { weekStart: Date; weekEnd: Date; count: number }[] = [];
+      
+      sortedDays.forEach(day => {
+        const [dayStr, monthStr, yearStr] = day.date.split('.');
+        const dayDate = new Date(Date.UTC(2000 + parseInt(yearStr), parseInt(monthStr) - 1, parseInt(dayStr), 0, 0, 0, 0));
+        
+        const daysDiff = Math.floor((dayDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        const weekNumber = Math.floor(daysDiff / 7);
+        
+        const weekStart = new Date(startDate.getTime() + weekNumber * 7 * 24 * 60 * 60 * 1000);
+        const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+        
+        let weekData = countsByWeek.find(w => w.weekStart.getTime() === weekStart.getTime());
+        
+        if (!weekData) {
+          weekData = { weekStart, weekEnd, count: 0 };
+          countsByWeek.push(weekData);
+        }
+        
+        weekData.count += day.count;
+      });
+      
+      return countsByWeek
+        .sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime())
+        .map(d => ({
+          date: `${formatDateDDMMYY(d.weekStart)}–${formatDateDDMMYY(d.weekEnd)}`,
+          count: d.count
+        }));
+    } else if (modalTimeFilter === '30') {
+      // Группировка по месяцам
+      const countsByMonth = new Map<string, number>();
+      
+      data.forEach(day => {
+        const [dayStr, monthStr, yearStr] = day.date.split('.');
+        const dayDate = new Date(2000 + parseInt(yearStr), parseInt(monthStr) - 1, parseInt(dayStr));
+        
+        const mm = String(dayDate.getUTCMonth() + 1).padStart(2, '0');
+        const yy = String(dayDate.getUTCFullYear()).slice(-2);
+        const monthKey = `${mm}.${yy}`;
+        
+        countsByMonth.set(monthKey, (countsByMonth.get(monthKey) || 0) + day.count);
+      });
+      
+      return Array.from(countsByMonth.entries())
+        .map(([month, count]) => {
+          const [mm, yy] = month.split('.').map(Number);
+          const startTime = new Date(2000 + yy, mm - 1, 1).getTime();
+          return { date: month, count, _startTime: startTime };
+        })
+        .sort((a, b) => a._startTime - b._startTime)
+        .map(({ date, count }) => ({ date, count }));
+    }
+    
+    return data;
+  }, [selectedEventModal, modalTimeFilter]);
 
   useEffect(() => {
     // Автоматическая загрузка dashboard-stats отключена, так как webhook может быть неактивен
@@ -3458,238 +3745,103 @@ const Dashboard: React.FC = () => {
 
       {/* Удалены захардкоженные карточки майнинга */}
 
-      {/* Кнопки для загрузки данных */}
-      <div className="mb-8 flex flex-col md:flex-row gap-3 justify-center items-center flex-wrap">
-        <button
-          onClick={loadUsersData}
-          disabled={usersLoading}
-          className={`group relative w-full md:w-[280px] md:min-w-[280px] h-[44px] px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 border text-sm whitespace-nowrap ${
-            usersLoading
-              ? 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 cursor-not-allowed text-gray-400'
-              : isDark
-              ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-750 hover:border-slate-600 shadow-sm hover:shadow-md'
-              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm hover:shadow-md'
-          }`}
-        >
+      {/* Data loading buttons */}
+      <div className="mb-8 neu-btn-grid">
+        <button onClick={loadUsersData} disabled={usersLoading} className="neu-btn-lg">
           {usersLoading ? (
-            <>
-              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-              <span>Загрузка данных...</span>
-            </>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : (
-            <>
-              <Users className={`w-4 h-4 ${isDark ? 'text-blue-400' : 'text-blue-600'} group-hover:scale-110 transition-transform`} />
-              <span>Показать статистику пользователей</span>
-            </>
+            <Users className="w-5 h-5 text-blue-400" />
           )}
+          <span>{usersLoading ? 'Loading...' : 'User Statistics'}</span>
         </button>
 
-        <button
-          onClick={loadWalletsData}
-          disabled={walletsLoading}
-          className={`group relative w-full md:w-[280px] md:min-w-[280px] h-[44px] px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 border text-sm whitespace-nowrap ${
-            walletsLoading
-              ? 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 cursor-not-allowed text-gray-400'
-              : isDark
-              ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-750 hover:border-slate-600 shadow-sm hover:shadow-md'
-              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm hover:shadow-md'
-          }`}
-        >
+        <button onClick={loadWalletsData} disabled={walletsLoading} className="neu-btn-lg">
           {walletsLoading ? (
-            <>
-              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-              <span>Загрузка данных...</span>
-            </>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : (
-            <>
-              <svg className={`w-4 h-4 ${isDark ? 'text-emerald-400' : 'text-emerald-600'} group-hover:scale-110 transition-transform`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-              </svg>
-              <span>Показать статистику Wallets</span>
-            </>
+            <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+            </svg>
           )}
+          <span>{walletsLoading ? 'Loading...' : 'Wallet Stats'}</span>
         </button>
 
-        <button
-          onClick={loadEventsData}
-          disabled={eventsLoading}
-          className={`group relative w-full md:w-[280px] md:min-w-[280px] h-[44px] px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 border text-sm whitespace-nowrap ${
-            eventsLoading
-              ? 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 cursor-not-allowed text-gray-400'
-              : isDark
-              ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-750 hover:border-slate-600 shadow-sm hover:shadow-md'
-              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm hover:shadow-md'
-          }`}
-        >
+        <button onClick={loadEventsData} disabled={eventsLoading} className="neu-btn-lg">
           {eventsLoading ? (
-            <>
-              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-              <span>Загрузка данных...</span>
-            </>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : (
-            <>
-              <svg className={`w-4 h-4 ${isDark ? 'text-violet-400' : 'text-violet-600'} group-hover:scale-110 transition-transform`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              <span>Показать Game Events</span>
-            </>
+            <svg className="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
           )}
+          <span>{eventsLoading ? 'Loading...' : 'Game Events'}</span>
         </button>
 
-        <button
-          onClick={loadReferralsData}
-          disabled={referralsLoading}
-          className={`group relative w-full md:w-[280px] md:min-w-[280px] h-[44px] px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 border text-sm whitespace-nowrap ${
-            referralsLoading
-              ? 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 cursor-not-allowed text-gray-400'
-              : isDark
-              ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-750 hover:border-slate-600 shadow-sm hover:shadow-md'
-              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm hover:shadow-md'
-          }`}
-        >
+        <button onClick={loadReferralsData} disabled={referralsLoading} className="neu-btn-lg">
           {referralsLoading ? (
-            <>
-              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-              <span>Загрузка данных...</span>
-            </>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : (
-            <>
-              <svg className={`w-4 h-4 ${isDark ? 'text-pink-400' : 'text-pink-600'} group-hover:scale-110 transition-transform`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              <span>Показать статистику Referrals</span>
-            </>
+            <svg className="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
           )}
+          <span>{referralsLoading ? 'Loading...' : 'Referral Stats'}</span>
         </button>
 
-        <button
-          onClick={loadPoolsData}
-          disabled={poolsLoading}
-          className={`group relative w-full md:w-[280px] md:min-w-[280px] h-[44px] px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 border text-sm whitespace-nowrap ${
-            poolsLoading
-              ? 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 cursor-not-allowed text-gray-400'
-              : isDark
-              ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-750 hover:border-slate-600 shadow-sm hover:shadow-md'
-              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm hover:shadow-md'
-          }`}
-        >
+        <button onClick={loadPoolsData} disabled={poolsLoading} className="neu-btn-lg">
           {poolsLoading ? (
-            <>
-              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-              <span>Загрузка данных...</span>
-            </>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : (
-            <>
-              <svg className={`w-4 h-4 ${isDark ? 'text-indigo-400' : 'text-indigo-600'} group-hover:scale-110 transition-transform`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
-              <span>Топ пулы</span>
-            </>
+            <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
           )}
+          <span>{poolsLoading ? 'Loading...' : 'Top Pools'}</span>
         </button>
 
-        <button
-          onClick={loadFunnelData}
-          disabled={funnelLoading}
-          className={`group relative w-full md:w-[280px] md:min-w-[280px] h-[44px] px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 border text-sm whitespace-nowrap ${
-            funnelLoading
-              ? 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 cursor-not-allowed text-gray-400'
-              : isDark
-              ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-750 hover:border-slate-600 shadow-sm hover:shadow-md'
-              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm hover:shadow-md'
-          }`}
-        >
+        <button onClick={loadFunnelData} disabled={funnelLoading} className="neu-btn-lg">
           {funnelLoading ? (
-            <>
-              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-              <span>Загрузка данных...</span>
-            </>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : (
-            <>
-              <svg className={`w-4 h-4 ${isDark ? 'text-cyan-400' : 'text-cyan-600'} group-hover:scale-110 transition-transform`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              <span>Users по уровням</span>
-            </>
+            <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
           )}
+          <span>{funnelLoading ? 'Loading...' : 'Users by Level'}</span>
         </button>
 
-        <button
-          onClick={loadLeadersData}
-          disabled={leadersLoading}
-          className={`group relative w-full md:w-[280px] md:min-w-[280px] h-[44px] px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 border text-sm whitespace-nowrap ${
-            leadersLoading
-              ? 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 cursor-not-allowed text-gray-400'
-              : isDark
-              ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-750 hover:border-slate-600 shadow-sm hover:shadow-md'
-              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm hover:shadow-md'
-          }`}
-        >
+        <button onClick={loadLeadersData} disabled={leadersLoading} className="neu-btn-lg">
           {leadersLoading ? (
-            <>
-              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-              <span>Загрузка данных...</span>
-            </>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : (
-            <>
-              <svg className={`w-4 h-4 ${isDark ? 'text-yellow-400' : 'text-yellow-600'} group-hover:scale-110 transition-transform`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-              </svg>
-              <span>Таблица лидеров</span>
-            </>
+            <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+            </svg>
           )}
+          <span>{leadersLoading ? 'Loading...' : 'Leaderboard'}</span>
         </button>
 
-        <button
-          onClick={loadKpiData}
-          disabled={kpiLoading}
-          className={`group relative w-full md:w-[280px] md:min-w-[280px] h-[44px] px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 border text-sm whitespace-nowrap ${
-            kpiLoading
-              ? 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 cursor-not-allowed text-gray-400'
-              : isDark
-              ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-750 hover:border-slate-600 shadow-sm hover:shadow-md'
-              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm hover:shadow-md'
-          }`}
-        >
+        <button onClick={loadKpiData} disabled={kpiLoading} className="neu-btn-lg">
           {kpiLoading ? (
-            <>
-              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-              <span>Загрузка данных...</span>
-            </>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : (
-            <>
-              <svg className={`w-4 h-4 ${isDark ? 'text-purple-400' : 'text-purple-600'} group-hover:scale-110 transition-transform`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              <span>Users KPI</span>
-            </>
+            <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
           )}
+          <span>{kpiLoading ? 'Loading...' : 'Users KPI'}</span>
         </button>
 
-        <button
-          onClick={loadAllUsersData}
-          disabled={allUsersLoading}
-          className={`group relative w-full md:w-[280px] md:min-w-[280px] h-[44px] px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 border text-sm whitespace-nowrap ${
-            allUsersLoading
-              ? 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 cursor-not-allowed text-gray-400'
-              : isDark
-              ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-750 hover:border-slate-600 shadow-sm hover:shadow-md'
-              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm hover:shadow-md'
-          }`}
-        >
+        <button onClick={loadAllUsersData} disabled={allUsersLoading} className="neu-btn-lg">
           {allUsersLoading ? (
-            <>
-              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-              <span>Загрузка данных...</span>
-            </>
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : (
-            <>
-              <svg className={`w-4 h-4 ${isDark ? 'text-green-400' : 'text-green-600'} group-hover:scale-110 transition-transform`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              <span>All Users Info</span>
-            </>
+            <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
           )}
+          <span>{allUsersLoading ? 'Loading...' : 'All Users Info'}</span>
         </button>
       </div>
 
@@ -3836,29 +3988,21 @@ const Dashboard: React.FC = () => {
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">📈 График прироста пользователей</h3>
                     </div>
                     
-                    {/* Фильтры для графика */}
-                    <div className={`p-1 rounded-xl ${isDark ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                      <div className="flex space-x-1">
-                        {[
-                          { key: 'all', label: 'По дням' },
-                          { key: '7', label: 'По неделям' },
-                          { key: '30', label: 'По месяцам' }
-                        ].map(({ key, label }) => (
-                          <button
-                            key={key}
-                            onClick={() => setTimeFilter(key as any)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                              timeFilter === key
-                                ? 'bg-orange-500 text-white shadow-lg'
-                                : isDark
-                                ? 'text-gray-300 hover:bg-gray-600'
-                                : 'text-gray-600 hover:bg-gray-200'
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
+                    {/* Filter buttons */}
+                    <div className="flex gap-2">
+                      {[
+                        { key: 'all', label: '1D' },
+                        { key: '7', label: '1W' },
+                        { key: '30', label: '1M' }
+                      ].map(({ key, label }) => (
+                        <button
+                          key={key}
+                          onClick={() => setTimeFilter(key as any)}
+                          className={timeFilter === key ? 'neu-btn-filter-active' : 'neu-btn-filter'}
+                        >
+                          {label}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
@@ -4098,12 +4242,14 @@ const Dashboard: React.FC = () => {
                   </div>
                 )}
 
-                {/* Прогноз на 7 дней */}
+                {/* Прогноз */}
                 {forecast && (
                   <div className={`p-6 rounded-xl shadow-lg ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
                     <div className="flex items-center gap-3 mb-4">
                       <span className="text-2xl">🔮</span>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Прогноз на 7 дней</h3>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        Прогноз на {timeFilter === '7' ? '3 недели' : timeFilter === '30' ? '3 месяца' : '7 дней'}
+                      </h3>
                     </div>
                     <div className="space-y-3">
                       {forecast.map((day: { date: string; count: number }, index: number) => (
@@ -4511,18 +4657,36 @@ const Dashboard: React.FC = () => {
       })()}
 
       {/* Отображение данных игровых событий */}
-      {eventsData && (
+      {eventsData && filteredEventsData && (
         <div className="mb-6">
-          <div className="flex items-center gap-3 mb-6">
-            <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">⚡ Статистика игровых событий</h2>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">⚡ Статистика игровых событий</h2>
+            </div>
+            {/* Time filter buttons */}
+            <div className="flex gap-2">
+              {[
+                { key: 'all', label: '1D' },
+                { key: '7', label: '1W' },
+                { key: '30', label: '1M' }
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setEventsTimeFilter(key as 'all' | '7' | '30')}
+                  className={eventsTimeFilter === key ? 'neu-btn-filter-active' : 'neu-btn-filter'}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
           
           <div className="space-y-6">
-            {/* График общей активности по дням */}
-            {eventsData.totalByDay && eventsData.totalByDay.length > 0 && (
+            {/* График общей активности */}
+            {filteredEventsData.totalByDay && filteredEventsData.totalByDay.length > 0 && (
               <div className={`p-6 rounded-xl shadow-lg ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
                 <div className="flex items-center gap-3 mb-6">
                   <TrendingUp className="w-6 h-6 text-purple-600" />
@@ -4532,10 +4696,10 @@ const Dashboard: React.FC = () => {
                 <div className="h-80">
                   <Line
                     data={{
-                      labels: eventsData.totalByDay.map(day => day.date),
+                      labels: filteredEventsData.totalByDay.map(day => day.date),
                       datasets: [{
-                        label: 'Всего событий',
-                        data: eventsData.totalByDay.map(day => day.count),
+                        label: eventsTimeFilter === 'all' ? 'Всего событий за день' : eventsTimeFilter === '7' ? 'Всего событий за неделю' : 'Всего событий за месяц',
+                        data: filteredEventsData.totalByDay.map(day => day.count),
                         borderColor: isDark ? '#a855f7' : '#9333ea',
                         backgroundColor: isDark ? 'rgba(168, 85, 247, 0.1)' : 'rgba(147, 51, 234, 0.05)',
                         borderWidth: 3,
@@ -4615,93 +4779,52 @@ const Dashboard: React.FC = () => {
               </div>
             )}
             
-            {/* Навигация по категориям событий */}
-            {eventsData.events && Object.keys(eventsData.events).length > 0 && (
-              <div className={`relative overflow-hidden rounded-2xl ${isDark ? 'bg-gradient-to-br from-slate-900/90 via-slate-800/80 to-slate-900/90 backdrop-blur-xl border border-slate-700/50' : 'bg-gradient-to-br from-white via-gray-50/50 to-white backdrop-blur-xl border border-gray-200/80 shadow-xl'}`}>
-                {/* Декоративные элементы */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl"></div>
-                <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-pink-500/5 to-orange-500/5 rounded-full blur-3xl"></div>
-                
-                <div className="relative p-8">
-                  {/* Заголовок */}
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className={`p-3 rounded-xl ${isDark ? 'bg-blue-500/10' : 'bg-blue-50'}`}>
-                      <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h3 className={`text-xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                        Быстрый переход к категориям
-                      </h3>
-                      <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                        Выберите категорию для просмотра статистики
-                      </p>
-                    </div>
+            {/* Category Navigation */}
+            {filteredEventsData.events && Object.keys(filteredEventsData.events).length > 0 && (
+              <div className="neu-card p-6">
+                {/* Header */}
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="neu-inset p-3">
+                    <svg className="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
                   </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Quick Navigation</h3>
+                    <p className="text-sm text-gray-400">Select category to view statistics</p>
+                  </div>
+                </div>
 
-                  {/* Сетка категорий */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                    {[
-                      { name: '⛏️ Игровые события майнинга', icon: '⛏️', gradient: 'from-orange-500 to-red-500' },
-                      { name: '🛒 Покупки и оборудование', icon: '🛒', gradient: 'from-blue-500 to-cyan-500' },
-                      { name: '📅 Ежедневные активности', icon: '📅', gradient: 'from-pink-500 to-rose-500' },
-                      { name: '👥 Реферальная система', icon: '👥', gradient: 'from-purple-500 to-pink-500' },
-                      { name: '🔄 Обмены и транзакции', icon: '🔄', gradient: 'from-cyan-500 to-blue-500' },
-                      { name: '🎯 Задания на выполнение', icon: '🎯', gradient: 'from-violet-500 to-purple-500' },
-                      { name: '📱 Социальные активности', icon: '📱', gradient: 'from-blue-500 to-indigo-500' },
-                      { name: '✅ Подключения и регистрации', icon: '✅', gradient: 'from-teal-500 to-emerald-500' },
-                      { name: '🖥️ Задания на покупку ASIC', icon: '🖥️', gradient: 'from-indigo-500 to-blue-500' },
-                      { name: '🏢 Задания на покупку объектов владения', icon: '🏢', gradient: 'from-emerald-500 to-green-500' },
-                      { name: '🏆 Достижения', icon: '🏆', gradient: 'from-yellow-500 to-orange-500' },
-                    ].map((category) => (
-                      <button
-                        key={category.name}
-                        onClick={() => scrollToCategory(category.name)}
-                        className={`group relative overflow-hidden rounded-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-xl ${
-                          isDark
-                            ? 'bg-slate-800/50 hover:bg-slate-800/80 border border-slate-700/50 hover:border-slate-600'
-                            : 'bg-white/80 hover:bg-white border border-gray-200 hover:border-gray-300 shadow-sm'
-                        }`}
-                      >
-                        {/* Градиентный фон при наведении */}
-                        <div className={`absolute inset-0 bg-gradient-to-r ${category.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`}></div>
-                        
-                        {/* Контент */}
-                        <div className="relative p-4 flex items-center gap-3">
-                          {/* Иконка с фоном */}
-                          <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center text-xl bg-gradient-to-br ${category.gradient} bg-opacity-10 group-hover:scale-110 transition-transform duration-300`}>
-                            <span className="drop-shadow-sm">{category.icon}</span>
-                          </div>
-                          
-                          {/* Текст */}
-                          <span className={`flex-1 text-left text-sm font-medium leading-tight ${
-                            isDark ? 'text-gray-200 group-hover:text-white' : 'text-gray-700 group-hover:text-gray-900'
-                          } transition-colors`}>
-                            {category.name.replace(/^[^\s]+\s/, '')}
-                          </span>
-                          
-                          {/* Стрелка */}
-                          <svg 
-                            className={`w-4 h-4 opacity-0 group-hover:opacity-100 transform translate-x-0 group-hover:translate-x-1 transition-all duration-300 ${
-                              isDark ? 'text-gray-400' : 'text-gray-500'
-                            }`} 
-                            fill="none" 
-                            stroke="currentColor" 
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                {/* Categories Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {[
+                    { name: '⛏️ Mining Events', icon: '⛏️' },
+                    { name: '🛒 Purchases', icon: '🛒' },
+                    { name: '📅 Daily Activities', icon: '📅' },
+                    { name: '👥 Referrals', icon: '👥' },
+                    { name: '🔄 Transactions', icon: '🔄' },
+                    { name: '🎯 Tasks', icon: '🎯' },
+                    { name: '📱 Social', icon: '📱' },
+                    { name: '✅ Registrations', icon: '✅' },
+                    { name: '🖥️ ASIC Tasks', icon: '🖥️' },
+                    { name: '🏢 Property Tasks', icon: '🏢' },
+                    { name: '🏆 Achievements', icon: '🏆' },
+                  ].map((category) => (
+                    <button
+                      key={category.name}
+                      onClick={() => scrollToCategory(category.name)}
+                      className="neu-btn text-left"
+                    >
+                      <span className="text-xl">{category.icon}</span>
+                      <span className="flex-1 text-xs text-gray-300">{category.name.replace(/^[^\s]+\s/, '')}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
             
             {/* Карточки по типам событий */}
-            {eventsData.events && Object.keys(eventsData.events).length > 0 && (
+            {filteredEventsData.events && Object.keys(filteredEventsData.events).length > 0 && (
               <div className="space-y-8">
                 {(() => {
                   // Названия событий на русском
@@ -4909,7 +5032,7 @@ const Dashboard: React.FC = () => {
                         // Фильтруем события: берем только те, что есть в данных и не исключены
                         const categoryEvents = eventsList
                           .filter(eventName => 
-                            eventsData.events[eventName] && 
+                            filteredEventsData.events[eventName] && 
                             !excludedEvents.includes(eventName)
                           );
                         
@@ -4930,13 +5053,13 @@ const Dashboard: React.FC = () => {
                             {/* Карточки событий в категории */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                               {categoryEvents.map(eventName => 
-                                renderEventCard(eventName, eventsData.events[eventName])
+                                renderEventCard(eventName, filteredEventsData.events[eventName])
                               )}
                               
                               {/* Специальный блок сравнения для майнинг-событий */}
                               {categoryName === '⛏️ Игровые события майнинга' && 
-                               eventsData.events['mining_started'] && 
-                               eventsData.events['mining_claimed'] && (
+                               filteredEventsData.events['mining_started'] && 
+                               filteredEventsData.events['mining_claimed'] && (
                                 <div className={`p-6 rounded-xl shadow-lg min-h-[280px] flex flex-col ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
                                   <div className="flex items-center justify-between mb-6">
                                     <div className="flex items-center gap-2">
@@ -4949,8 +5072,8 @@ const Dashboard: React.FC = () => {
                                     {/* Процентное соотношение */}
                                     <div className="mb-2">
                                       {(() => {
-                                        const totalStarted = eventsData.events['mining_started'].reduce((sum: number, day: any) => sum + day.count, 0);
-                                        const totalClaimed = eventsData.events['mining_claimed'].reduce((sum: number, day: any) => sum + day.count, 0);
+                                        const totalStarted = filteredEventsData.events['mining_started'].reduce((sum: number, day: any) => sum + day.count, 0);
+                                        const totalClaimed = filteredEventsData.events['mining_claimed'].reduce((sum: number, day: any) => sum + day.count, 0);
                                         const claimRate = totalStarted > 0 ? ((totalClaimed / totalStarted) * 100).toFixed(1) : '0';
                                         
                                         return (
@@ -4982,11 +5105,11 @@ const Dashboard: React.FC = () => {
                                     >
                                       <Line
                                         data={{
-                                          labels: eventsData.events['mining_started'].map((d: any) => d.date),
+                                          labels: filteredEventsData.events['mining_started'].map((d: any) => d.date),
                                           datasets: [
                                             {
                                               label: 'Запущено',
-                                              data: eventsData.events['mining_started'].map((d: any) => d.count),
+                                              data: filteredEventsData.events['mining_started'].map((d: any) => d.count),
                                               borderColor: '#f97316',
                                               backgroundColor: 'rgba(249, 115, 22, 0.1)',
                                               borderWidth: 2,
@@ -4997,7 +5120,7 @@ const Dashboard: React.FC = () => {
                                             },
                                             {
                                               label: 'Собрано',
-                                              data: eventsData.events['mining_claimed'].map((d: any) => d.count),
+                                              data: filteredEventsData.events['mining_claimed'].map((d: any) => d.count),
                                               borderColor: '#10b981',
                                               backgroundColor: 'rgba(16, 185, 129, 0.1)',
                                               borderWidth: 2,
@@ -5388,10 +5511,10 @@ const Dashboard: React.FC = () => {
       {/* Удален блок "Активные майнеры" */}
       
       {/* Модальное окно с детальным графиком */}
-      {selectedEventModal && (
+      {selectedEventModal && filteredModalData && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 pt-12 pb-32 overflow-y-auto"
-          onClick={() => setSelectedEventModal(null)}
+          onClick={() => { setSelectedEventModal(null); setModalTimeFilter('all'); }}
         >
           <div 
             className={`max-w-4xl w-full rounded-xl shadow-2xl p-6 mb-8 ${isDark ? 'bg-gray-800' : 'bg-white'}`}
@@ -5406,7 +5529,7 @@ const Dashboard: React.FC = () => {
                 </h3>
               </div>
               <button
-                onClick={() => setSelectedEventModal(null)}
+                onClick={() => { setSelectedEventModal(null); setModalTimeFilter('all'); }}
                 className={`p-2 rounded-lg transition-colors ${
                   isDark 
                     ? 'hover:bg-gray-700 text-gray-300' 
@@ -5419,18 +5542,39 @@ const Dashboard: React.FC = () => {
               </button>
             </div>
             
+            {/* Filter buttons */}
+            <div className="flex gap-2 mb-6">
+              {[
+                { key: 'all', label: '1D' },
+                { key: '7', label: '1W' },
+                { key: '30', label: '1M' }
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setModalTimeFilter(key as 'all' | '7' | '30')}
+                  className={modalTimeFilter === key ? 'neu-btn-filter-active' : 'neu-btn-filter'}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            
             {/* Статистика */}
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Всего</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                  {modalTimeFilter === 'all' ? 'Всего' : modalTimeFilter === '7' ? 'Всего за период' : 'Всего за период'}
+                </div>
                 <div className="text-3xl font-bold" style={{ color: selectedEventModal.eventInfo.color }}>
-                  {selectedEventModal.eventData.reduce((sum, day) => sum + day.count, 0)}
+                  {filteredModalData.reduce((sum, day) => sum + day.count, 0)}
                 </div>
               </div>
               <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Сегодня</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                  {modalTimeFilter === 'all' ? 'Последний день' : modalTimeFilter === '7' ? 'Последняя неделя' : 'Последний месяц'}
+                </div>
                 <div className="text-3xl font-bold" style={{ color: selectedEventModal.eventInfo.color }}>
-                  {selectedEventModal.eventData.length > 0 ? selectedEventModal.eventData[selectedEventModal.eventData.length - 1].count : 0}
+                  {filteredModalData.length > 0 ? filteredModalData[filteredModalData.length - 1].count : 0}
                 </div>
               </div>
             </div>
@@ -5439,10 +5583,10 @@ const Dashboard: React.FC = () => {
             <div className="h-96">
               <Line
                 data={{
-                  labels: selectedEventModal.eventData.map(d => d.date),
+                  labels: filteredModalData.map(d => d.date),
                   datasets: [{
                     label: selectedEventModal.eventInfo.title,
-                    data: selectedEventModal.eventData.map(d => d.count),
+                    data: filteredModalData.map(d => d.count),
                     borderColor: selectedEventModal.eventInfo.color,
                     backgroundColor: `${selectedEventModal.eventInfo.color}20`,
                     borderWidth: 3,

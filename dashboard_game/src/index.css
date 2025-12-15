@@ -1,3 +1,389 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* =====================================================
+   NEUMORPHIC DARK THEME
+   ===================================================== */
+
+@layer base {
+  body {
+    @apply antialiased transition-colors duration-300;
+  }
+  
+  .dark {
+    background: #1a1a1a !important;
+  }
+  
+  /* Custom scrollbar - Dark */
+  .dark ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .dark ::-webkit-scrollbar-track {
+    background-color: #1a1a1a;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background-color: #404040;
+    border-radius: 9999px;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background-color: #525252;
+  }
+}
+
+@layer components {
+  /* ===========================================
+     NEUMORPHIC CARDS
+     =========================================== */
+  
+  .neu-card {
+    background: #212121;
+    border-radius: 20px;
+    box-shadow: 8px 8px 16px rgb(25, 25, 25),
+                -8px -8px 16px rgb(60, 60, 60);
+  }
+  
+  .neu-card-sm {
+    background: #212121;
+    border-radius: 15px;
+    box-shadow: 5px 5px 10px rgb(25, 25, 25),
+                -5px -5px 10px rgb(60, 60, 60);
+  }
+  
+  .neu-card-lg {
+    background: #212121;
+    border-radius: 30px;
+    box-shadow: 15px 15px 30px rgb(25, 25, 25),
+                -15px -15px 30px rgb(60, 60, 60);
+  }
+  
+  .neu-inset {
+    background: #212121;
+    border-radius: 15px;
+    box-shadow: inset 5px 5px 10px rgb(25, 25, 25),
+                inset -5px -5px 10px rgb(60, 60, 60);
+  }
+
+  .neu-input {
+    background: #212121;
+    border-radius: 12px;
+    box-shadow: inset 3px 3px 6px rgb(25, 25, 25),
+                inset -3px -3px 6px rgb(60, 60, 60);
+    border: none;
+    color: #ffffff;
+    padding: 12px 16px;
+  }
+  
+  .neu-input:focus {
+    outline: none;
+    box-shadow: inset 3px 3px 6px rgb(25, 25, 25),
+                inset -3px -3px 6px rgb(60, 60, 60),
+                0 0 0 2px rgba(249, 115, 22, 0.5);
+  }
+  
+  .neu-nav {
+    background: #212121;
+    box-shadow: 0 -8px 16px rgb(25, 25, 25);
+  }
+  
+  .neu-nav-item-active {
+    background: #212121;
+    box-shadow: inset 3px 3px 6px rgb(25, 25, 25),
+                inset -3px -3px 6px rgb(60, 60, 60);
+    color: #f97316;
+  }
+  
+  .neu-header {
+    background: #212121;
+    box-shadow: 0 8px 16px rgb(25, 25, 25);
+  }
+  
+  .neu-status {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  
+  .neu-status-active {
+    background: #22c55e;
+    box-shadow: 0 0 10px #22c55e;
+  }
+  
+  .neu-glow-orange {
+    box-shadow: 8px 8px 16px rgb(25, 25, 25),
+                -8px -8px 16px rgb(60, 60, 60),
+                0 0 20px rgba(249, 115, 22, 0.3);
+  }
+
+  /* ===========================================
+     NEUMORPHIC BUTTONS - Same style as cards
+     =========================================== */
+  
+  .neu-btn {
+    background: #212121;
+    border-radius: 15px;
+    box-shadow: 5px 5px 10px rgb(25, 25, 25),
+                -5px -5px 10px rgb(60, 60, 60);
+    border: none;
+    color: #ffffff;
+    padding: 0.625rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .neu-btn:hover {
+    box-shadow: 3px 3px 6px rgb(25, 25, 25),
+                -3px -3px 6px rgb(60, 60, 60);
+  }
+
+  .neu-btn:active {
+    box-shadow: inset 3px 3px 6px rgb(25, 25, 25),
+                inset -3px -3px 6px rgb(60, 60, 60);
+  }
+
+  /* Filter buttons - fixed width */
+  .neu-btn-filter {
+    background: #212121;
+    border-radius: 12px;
+    box-shadow: 4px 4px 8px rgb(25, 25, 25),
+                -4px -4px 8px rgb(60, 60, 60);
+    border: none;
+    color: #a3a3a3;
+    padding: 0.5rem 0;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    width: 70px;
+    min-width: 70px;
+  }
+
+  .neu-btn-filter:hover {
+    box-shadow: 2px 2px 4px rgb(25, 25, 25),
+                -2px -2px 4px rgb(60, 60, 60);
+    color: #ffffff;
+  }
+
+  .neu-btn-filter-active {
+    background: #212121;
+    border-radius: 12px;
+    box-shadow: inset 3px 3px 6px rgb(25, 25, 25),
+                inset -3px -3px 6px rgb(60, 60, 60);
+    border: none;
+    color: #f97316;
+    padding: 0.5rem 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    width: 70px;
+    min-width: 70px;
+  }
+
+  .neu-btn-active {
+    background: #212121;
+    border-radius: 15px;
+    box-shadow: inset 4px 4px 8px rgb(25, 25, 25),
+                inset -4px -4px 8px rgb(60, 60, 60);
+    color: #f97316;
+    padding: 0.625rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  /* Large button variant - for main action buttons */
+  .neu-btn-lg {
+    background: #212121;
+    border-radius: 15px;
+    box-shadow: 6px 6px 12px rgb(25, 25, 25),
+                -6px -6px 12px rgb(60, 60, 60);
+    border: none;
+    color: #ffffff;
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .neu-btn-lg:hover {
+    box-shadow: 4px 4px 8px rgb(25, 25, 25),
+                -4px -4px 8px rgb(60, 60, 60);
+  }
+
+  .neu-btn-lg:active {
+    box-shadow: inset 3px 3px 6px rgb(25, 25, 25),
+                inset -3px -3px 6px rgb(60, 60, 60);
+  }
+
+  .neu-btn-lg:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* Mobile grid for buttons */
+  .neu-btn-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+
+  @media (min-width: 640px) {
+    .neu-btn-grid {
+      grid-template-columns: repeat(3, auto);
+      justify-content: center;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .neu-btn-grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+  }
+}
+
+/* ===========================================
+   DARK MODE STYLE OVERRIDES
+   =========================================== */
+
+/* Neumorphic card style for dark mode containers */
+.dark [class*="bg-white"],
+.dark [class*="bg-gray-800"],
+.dark [class*="bg-gray-700"] {
+  background: #212121 !important;
+  border-radius: 20px !important;
+  box-shadow: 8px 8px 16px rgb(25, 25, 25),
+              -8px -8px 16px rgb(60, 60, 60) !important;
+  border: none !important;
+}
+
+/* Text colors */
+.dark [class*="text-gray-900"],
+.dark [class*="text-gray-800"] {
+  color: #ffffff !important;
+}
+
+.dark [class*="text-gray-700"] {
+  color: #e5e5e5 !important;
+}
+
+.dark [class*="text-gray-600"] {
+  color: #a3a3a3 !important;
+}
+
+.dark [class*="text-gray-500"] {
+  color: #737373 !important;
+}
+
+/* Remove borders */
+.dark [class*="border-gray"] {
+  border-color: transparent !important;
+}
+
+/* Inputs neumorphic style */
+.dark input,
+.dark textarea,
+.dark select {
+  background: #212121 !important;
+  border-radius: 12px !important;
+  box-shadow: inset 3px 3px 6px rgb(25, 25, 25),
+              inset -3px -3px 6px rgb(60, 60, 60) !important;
+  border: none !important;
+  color: #ffffff !important;
+}
+
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  outline: none !important;
+  box-shadow: inset 3px 3px 6px rgb(25, 25, 25),
+              inset -3px -3px 6px rgb(60, 60, 60),
+              0 0 0 2px rgba(249, 115, 22, 0.5) !important;
+}
+
+/* Remove old shadows, apply neumorphic */
+.dark [class*="shadow-lg"],
+.dark [class*="shadow-xl"] {
+  box-shadow: 8px 8px 16px rgb(25, 25, 25),
+              -8px -8px 16px rgb(60, 60, 60) !important;
+}
+
+/* Modal backdrop */
+.dark [class*="bg-black"][class*="bg-opacity"],
+.dark .bg-black\/50 {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: blur(4px);
+}
+
+/* Rounded corners */
+.dark [class*="rounded-xl"] {
+  border-radius: 20px !important;
+}
+
+.dark [class*="rounded-2xl"] {
+  border-radius: 24px !important;
+}
+
+/* ===========================================
+   ANIMATIONS
+   =========================================== */
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 8px 8px 16px rgb(25, 25, 25),
+                -8px -8px 16px rgb(60, 60, 60),
+                0 0 10px rgba(249, 115, 22, 0.3);
+  }
+  50% {
+    box-shadow: 8px 8px 16px rgb(25, 25, 25),
+                -8px -8px 16px rgb(60, 60, 60),
+                0 0 25px rgba(249, 115, 22, 0.6);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+

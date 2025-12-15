@@ -1,23 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, Eye, EyeOff, Coins, Trophy, Calendar, Settings, LogOut, Crown, GraduationCap, Users, ChevronRight, UserPlus, History, MessageSquare } from 'lucide-react';
+import { User, Eye, EyeOff, Coins, Trophy, Calendar, Settings, LogOut, Crown, Users, ChevronRight, MessageSquare } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import ProfileSettings from './ProfileSettings';
-import TeacherRequests from './TeacherRequests';
-import ScheduleHistory from './ScheduleHistory';
-import TeacherRequestForm from './TeacherRequestForm';
 import EventsManagement from './EventsManagement';
 import NewsManagement from './NewsManagement';
 import UserMessages from './UserMessages';
 import CourseApplications from './CourseApplications';
 import UserManagement from './UserManagement';
 import ReferralScreen from './ReferralScreen';
-import MyAvatars from './MyAvatars';
 import Leaderboard from './Leaderboard';
 import Transactions from './Transactions';
 import Farming from './Farming';
 import Tasks from './Tasks';
-import AvatarShop from './AvatarShop';
 
 interface ProfileProps {
   onShowEmailConfirmation: (data: {
@@ -44,21 +39,16 @@ const Profile: React.FC<ProfileProps> = ({ onShowEmailConfirmation, onForceGoToL
   const [isRegistering, setIsRegistering] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
-  const [showTeacherRequests, setShowTeacherRequests] = useState(false);
-  const [showScheduleHistory, setShowScheduleHistory] = useState(false);
-  const [showTeacherRequestForm, setShowTeacherRequestForm] = useState(false);
   const [showEventsManagement, setShowEventsManagement] = useState(false);
   const [showNewsManagement, setShowNewsManagement] = useState(false);
   const [showUserMessages, setShowUserMessages] = useState(false);
   const [showCourseApplications, setShowCourseApplications] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [showReferral, setShowReferral] = useState(false);
-  const [showMyAvatars, setShowMyAvatars] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showTransactions, setShowTransactions] = useState(false);
   const [showFarming, setShowFarming] = useState(false);
   const [showTasks, setShowTasks] = useState(false);
-  const [showAvatarShop, setShowAvatarShop] = useState(false);
   const [dashEcosCoinBalance, setDashEcosCoinBalance] = useState(0);
   const [leaderboardPosition, setLeaderboardPosition] = useState(0);
   const [isProfileDataLoading, setIsProfileDataLoading] = useState(true);
@@ -626,36 +616,6 @@ const Profile: React.FC<ProfileProps> = ({ onShowEmailConfirmation, onForceGoToL
     );
   }
 
-  // Если открыт экран заявки на роль аналитика, показываем его
-  if (showTeacherRequestForm) {
-    return (
-      <TeacherRequestForm
-        onBack={() => setShowTeacherRequestForm(false)}
-        isDark={isDark}
-      />
-    );
-  }
-
-  // Если открыт экран запросов учителей, показываем его
-  if (showTeacherRequests) {
-    return (
-      <TeacherRequests
-        onBack={() => setShowTeacherRequests(false)}
-        isDark={isDark}
-      />
-    );
-  }
-
-  // Если открыт экран истории расписаний, показываем его
-  if (showScheduleHistory) {
-    return (
-      <ScheduleHistory
-        onBack={() => setShowScheduleHistory(false)}
-        isDark={isDark}
-      />
-    );
-  }
-
   // Если открыты настройки профиля, показываем их
   if (showProfileSettings) {
     return (
@@ -730,19 +690,6 @@ const Profile: React.FC<ProfileProps> = ({ onShowEmailConfirmation, onForceGoToL
     );
   }
 
-  // Если открыт экран моих аватаров, показываем его
-  if (showMyAvatars) {
-    return (
-      <MyAvatars
-        onBack={() => setShowMyAvatars(false)}
-        onOpenShop={() => {
-          setShowMyAvatars(false);
-          setShowAvatarShop(true);
-        }}
-      />
-    );
-  }
-
   // Если открыт экран таблицы лидеров, показываем его
   if (showLeaderboard) {
     return (
@@ -775,15 +722,6 @@ const Profile: React.FC<ProfileProps> = ({ onShowEmailConfirmation, onForceGoToL
     return (
       <Tasks
         onBack={() => setShowTasks(false)}
-      />
-    );
-  }
-
-  // Если открыт экран магазина аватаров, показываем его
-  if (showAvatarShop) {
-    return (
-      <AvatarShop
-        onBack={() => setShowAvatarShop(false)}
       />
     );
   }
@@ -972,29 +910,6 @@ const Profile: React.FC<ProfileProps> = ({ onShowEmailConfirmation, onForceGoToL
         </div>
       </div>
 
-      {/* Запрос роли аналитика - только для учеников */}
-      {user?.role === 'student' && (
-        <div className={`rounded-2xl p-6 transition-colors duration-300 ${
-                isDark ? 'bg-gray-800' : 'bg-white'
-              }`}>
-          <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-800'}`}>Развитие</h3>
-          <div className="space-y-3">
-            <button 
-              onClick={() => setShowTeacherRequestForm(true)}
-              className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors duration-300 ${
-                isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
-              }`}
-            >
-              <div className="flex items-center space-x-3">
-                <GraduationCap className={`w-5 h-5 ${isDark ? 'text-blue-400' : 'text-blue-500'}`} />
-                <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Запросить роль аналитика</span>
-              </div>
-              <ChevronRight className={`w-4 h-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
-            </button>
-              </div>
-              </div>
-      )}
-
       {/* Административные функции - только для администраторов */}
       {user?.role === 'admin' && (
         <div className={`rounded-2xl p-6 transition-colors duration-300 ${
@@ -1004,62 +919,6 @@ const Profile: React.FC<ProfileProps> = ({ onShowEmailConfirmation, onForceGoToL
             Административные функции
             </h3>
           <div className="space-y-4">
-            {/* Запросы на добавление в качестве Аналитика */}
-            <button
-              onClick={() => setShowTeacherRequests(true)}
-              className={`w-full p-4 rounded-xl border-2 border-dashed transition-all duration-300 ${
-                isDark 
-                  ? 'border-gray-600 hover:border-orange-500 hover:bg-gray-700/50' 
-                  : 'border-gray-300 hover:border-orange-500 hover:bg-gray-50'
-              } group`}
-            >
-              <div className="flex items-center space-x-3">
-                <div className={`w-10 h-10 rounded-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center group-hover:bg-orange-500 transition-colors`}>
-                  <UserPlus className={`w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-500'} group-hover:text-white transition-colors`} />
-                </div>
-                <div className="flex-1 text-left">
-                  <h4 className={`font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>
-                    Запросы на добавление в качестве аналитика
-                  </h4>
-                  <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Рассмотрение заявок от пользователей
-                  </p>
-                </div>
-                <div className={`w-6 h-6 rounded-full ${isDark ? 'bg-gray-600' : 'bg-gray-300'} flex items-center justify-center group-hover:bg-orange-500 transition-colors`}>
-                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            </button>
-
-            {/* Последние изменения расписаний */}
-            <button
-              onClick={() => setShowScheduleHistory(true)}
-              className={`w-full p-4 rounded-xl border-2 border-dashed transition-all duration-300 ${
-                isDark 
-                  ? 'border-gray-600 hover:border-orange-500 hover:bg-gray-700/50' 
-                  : 'border-gray-300 hover:border-orange-500 hover:bg-gray-50'
-              } group`}
-            >
-              <div className="flex items-center space-x-3">
-                <div className={`w-10 h-10 rounded-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center group-hover:bg-orange-500 transition-colors`}>
-                  <History className={`w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-500'} group-hover:text-white transition-colors`} />
-                </div>
-                <div className="flex-1 text-left">
-                  <h4 className={`font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>
-                    Последние изменения расписаний
-                  </h4>
-                  <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    История и фильтрация изменений
-                  </p>
-                </div>
-                <div className={`w-6 h-6 rounded-full ${isDark ? 'bg-gray-600' : 'bg-gray-300'} flex items-center justify-center group-hover:bg-orange-500 transition-colors`}>
-                  <span className="text-xs font-bold text-white">∞</span>
-            </div>
-          </div>
-            </button>
-
             {/* Управление событиями */}
             <button
               onClick={() => setShowEventsManagement(true)}
