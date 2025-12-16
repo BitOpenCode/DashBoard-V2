@@ -8958,48 +8958,54 @@ const Dashboard: React.FC = () => {
                               </div>
                               <div className="space-y-2 max-h-96 overflow-y-auto">
                                 {filteredOrders.map((order: any, idx: number) => (
-                                  <div key={idx} className={`p-3 rounded border ${isDark ? 'bg-gray-600 border-gray-500' : 'bg-white border-gray-200'}`}>
+                                  <div key={idx} className={`p-3 rounded-lg neu-card ${isDark ? '' : ''}`}>
                                     <div className="flex justify-between items-start">
                                       <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-1">
-                                          <span className={`text-sm font-semibold ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
+                                          <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                                             {order.item_code || `Заказ #${order.order_id || idx + 1}`}
                                           </span>
                                           <span className={`text-xs px-2 py-0.5 rounded ${
                                             order.status === 'completed' 
-                                              ? 'bg-green-500/20 text-green-600' 
+                                              ? isDark 
+                                                ? 'bg-green-500/30 text-green-400' 
+                                                : 'bg-green-500/20 text-green-700'
                                               : order.status === 'cancelled' || order.status === 'failed'
-                                              ? 'bg-red-500/20 text-red-600'
-                                              : 'bg-yellow-500/20 text-yellow-600'
+                                              ? isDark
+                                                ? 'bg-red-500/30 text-red-400'
+                                                : 'bg-red-500/20 text-red-700'
+                                              : isDark
+                                                ? 'bg-yellow-500/30 text-yellow-400'
+                                                : 'bg-yellow-500/20 text-yellow-700'
                                           }`}>
                                             {order.status || 'pending'}
                                           </span>
                                         </div>
                                         <div className="flex gap-4 mt-2 text-xs">
                                           {order.amount_points > 0 && (
-                                            <span className={`font-mono ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                            <span className={`font-mono ${isDark ? 'text-white' : 'text-gray-900'}`}>
                                               Points: {formatFullNumber(order.amount_points)}
                                             </span>
                                           )}
                                           {order.amount_ton > 0 && (
-                                            <span className={`font-mono ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                            <span className={`font-mono ${isDark ? 'text-white' : 'text-gray-900'}`}>
                                               TON: {formatFullNumber(order.amount_ton)}
                                             </span>
                                           )}
                                         </div>
                                         {order.metadata && typeof order.metadata === 'object' && Object.keys(order.metadata).length > 0 && (
                                           <details className="mt-2">
-                                            <summary className={`text-xs cursor-pointer ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                                              Метаданные
+                                            <summary className={`text-xs cursor-pointer ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                                              ► Метаданные
                                             </summary>
-                                            <pre className={`text-xs mt-1 p-2 rounded ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-800'}`}>
+                                            <pre className={`text-xs mt-1 p-2 rounded-lg neu-inset ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
                                               {JSON.stringify(order.metadata, null, 2)}
                                             </pre>
                                           </details>
                                         )}
                                       </div>
                                       <div className="text-right ml-4">
-                                        <span className={`text-xs block ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        <span className={`text-xs block ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
                                           {order.created_at 
                                             ? new Date(order.created_at).toLocaleDateString('ru-RU', {
                                                 day: '2-digit',
@@ -9012,7 +9018,7 @@ const Dashboard: React.FC = () => {
                                             : 'N/A'}
                                         </span>
                                         {order.order_id && (
-                                          <span className={`text-xs block mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                          <span className={`text-xs block mt-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                                             ID: {order.order_id}
                                           </span>
                                         )}
