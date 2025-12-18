@@ -11,7 +11,6 @@ import UserManagement from './UserManagement';
 import ReferralScreen from './ReferralScreen';
 import Leaderboard from './Leaderboard';
 import Transactions from './Transactions';
-import Farming from './Farming';
 import Tasks from './Tasks';
 
 interface ProfileProps {
@@ -47,7 +46,6 @@ const Profile: React.FC<ProfileProps> = ({ onShowEmailConfirmation, onForceGoToL
   const [showReferral, setShowReferral] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showTransactions, setShowTransactions] = useState(false);
-  const [showFarming, setShowFarming] = useState(false);
   const [showTasks, setShowTasks] = useState(false);
   const [dashEcosCoinBalance, setDashEcosCoinBalance] = useState(0);
   const [leaderboardPosition, setLeaderboardPosition] = useState(0);
@@ -704,15 +702,6 @@ const Profile: React.FC<ProfileProps> = ({ onShowEmailConfirmation, onForceGoToL
     return (
       <Transactions
         onBack={() => setShowTransactions(false)}
-      />
-    );
-  }
-
-  // Если открыт экран фарминга, показываем его
-  if (showFarming) {
-    return (
-      <Farming
-        onBack={() => setShowFarming(false)}
       />
     );
   }
