@@ -6,7 +6,7 @@ import {
   Star, Repeat, Monitor, Laptop, Building2, Zap, Mountain, Wallet, 
   CalendarDays, Diamond, Gamepad2, Trophy, Medal, ThumbsUp, Heart, 
   Pointer, PartyPopper, Globe, Gift, UserPlus, CreditCard, Award,
-  Search, ChevronRight, X
+  Search, ChevronRight, X, Activity
 } from 'lucide-react';
 
 // Icon component for events
@@ -55,13 +55,14 @@ import {
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   Title,
   Tooltip,
   Legend,
   Filler,
   ArcElement
 } from 'chart.js';
-import { Line, Doughnut } from 'react-chartjs-2';
+import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { subDays, format, differenceInDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { Address } from '@ton/core';
@@ -72,6 +73,7 @@ ChartJS.register(
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   Title,
   Tooltip,
   Legend,
@@ -123,6 +125,55 @@ const Dashboard: React.FC = () => {
     withoutWalletPercent: string;
   } | null>(null);
   const [walletsLoading, setWalletsLoading] = useState<boolean>(false);
+  const [selectedTonCategories, setSelectedTonCategories] = useState<Set<string>>(new Set());
+  const [tonOrdersData, setTonOrdersData] = useState<{
+    users: Array<{
+      person_id: number;
+      first_name: string | null;
+      last_name: string | null;
+      username: string | null;
+      tg_id: string | null;
+      tg_language: string | null;
+      tg_created_at: string | null;
+      tg_updated_at: string | null;
+      photo_url: string | null;
+      wallet_address: string | null;
+      ecos_5000_purchases: number | string;
+      ecos_5000_ton_spent: number | string | null;
+      ecos_5000_first_purchase: string | null;
+      ecos_5000_last_purchase: string | null;
+      ecos_10000_purchases: number | string;
+      ecos_10000_ton_spent: number | string | null;
+      ecos_10000_first_purchase: string | null;
+      ecos_10000_last_purchase: string | null;
+      ecos_100000_purchases: number | string;
+      ecos_100000_ton_spent: number | string | null;
+      ecos_100000_first_purchase: string | null;
+      ecos_100000_last_purchase: string | null;
+      ecos_200000_purchases: number | string;
+      ecos_200000_ton_spent: number | string | null;
+      ecos_200000_first_purchase: string | null;
+      ecos_200000_last_purchase: string | null;
+      ecos_1000000_purchases: number | string;
+      ecos_1000000_ton_spent: number | string | null;
+      ecos_1000000_first_purchase: string | null;
+      ecos_1000000_last_purchase: string | null;
+      premium_7d_purchases: number | string;
+      premium_7d_ton_spent: number | string | null;
+      premium_7d_first_purchase: string | null;
+      premium_7d_last_purchase: string | null;
+      premium_30d_purchases: number | string;
+      premium_30d_ton_spent: number | string | null;
+      premium_30d_first_purchase: string | null;
+      premium_30d_last_purchase: string | null;
+      user_total_ton_spent: number | string;
+      global_total_ton_received: number | string;
+      [key: string]: any;
+    }>;
+    global_total_ton_received: number;
+  } | null>(null);
+  const [tonOrdersTimeFilter, setTonOrdersTimeFilter] = useState<'all' | '7' | '30'>('all');
+  const [tonOrdersChartType, setTonOrdersChartType] = useState<'line' | 'bar'>('line');
   const [eventsData, setEventsData] = useState<{
     events: {
       [key: string]: { date: string; count: number }[];
@@ -695,6 +746,9 @@ const Dashboard: React.FC = () => {
         debug: data.debug
       });
       
+      // Загружаем данные TON заказов
+      await loadTonOrdersData();
+      
     } catch (e: any) {
       console.error('❌ Ошибка при загрузке данных событий:', e);
       
@@ -714,6 +768,82 @@ const Dashboard: React.FC = () => {
       alert('Ошибка загрузки данных событий: ' + errorMessage);
     } finally {
       setEventsLoading(false);
+    }
+  };
+
+  const loadTonOrdersData = async () => {
+    try {
+      const webhookUrl = import.meta.env.DEV 
+        ? '/webhook/ton-orders'
+        : 'https://n8n-p.blc.am/webhook/ton-orders';
+      
+      console.log('🔗 Загрузка данных TON заказов...');
+      console.log('URL:', webhookUrl);
+      
+      const response = await fetch(webhookUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      let data = await response.json();
+      console.log('✅ Данные TON заказов получены (RAW):', data);
+      
+      // Обрабатываем различные форматы данных
+      let processedData = null;
+      
+      if (Array.isArray(data)) {
+        // Если это массив, берем первый элемент
+        if (data.length > 0) {
+          processedData = data[0];
+        }
+      } else if (data && typeof data === 'object') {
+        processedData = data;
+      }
+      
+      // Проверяем наличие users в разных местах
+      let users = null;
+      let globalTotal = 0;
+      
+      if (processedData) {
+        if (processedData.users && Array.isArray(processedData.users)) {
+          users = processedData.users;
+          globalTotal = processedData.global_total_ton_received || 0;
+        } else if (processedData.jsonb_build_object && processedData.jsonb_build_object.users) {
+          users = processedData.jsonb_build_object.users;
+          globalTotal = processedData.jsonb_build_object.global_total_ton_received || 0;
+        } else if (processedData.json && processedData.json.users) {
+          users = processedData.json.users;
+          globalTotal = processedData.json.global_total_ton_received || 0;
+        }
+      }
+      
+      if (users && Array.isArray(users)) {
+        console.log(`✅ Обработано ${users.length} пользователей TON заказов`);
+        
+        // Нормализуем global_total_ton_received
+        const normalizedGlobalTotal = typeof globalTotal === 'string' ? parseFloat(globalTotal) : (globalTotal || 0);
+        
+        setTonOrdersData({
+          users: users,
+          global_total_ton_received: normalizedGlobalTotal
+        });
+        // Инициализируем все категории как выбранные
+        const allCategories = ['ecos_5000', 'ecos_10000', 'ecos_100000', 'ecos_200000', 'ecos_1000000', 'premium_7d', 'premium_30d'];
+        setSelectedTonCategories(new Set(allCategories));
+      } else {
+        console.warn('⚠️ Не удалось извлечь данные пользователей TON заказов:', processedData);
+        setTonOrdersData(null);
+      }
+      
+    } catch (e: any) {
+      console.error('❌ Ошибка при загрузке данных TON заказов:', e);
+      setTonOrdersData(null);
     }
   };
 
@@ -1964,12 +2094,27 @@ const Dashboard: React.FC = () => {
       let rawUsers: any[] = [];
       
       if (Array.isArray(data)) {
+        // Проверяем, не является ли это массивом с jsonb_build_object
+        if (data.length > 0 && data[0] && data[0].jsonb_build_object) {
+          const jsonbData = data[0].jsonb_build_object;
+          if (jsonbData.users && Array.isArray(jsonbData.users)) {
+            rawUsers = jsonbData.users;
+            console.log('✅ Данные - массив с jsonb_build_object.users');
+          } else {
+            rawUsers = data;
+            console.log('✅ Данные - массив пользователей');
+          }
+        } else {
         // Если это массив пользователей напрямую
         rawUsers = data;
         console.log('✅ Данные - массив пользователей');
+        }
       } else if (data && typeof data === 'object') {
         // Если это объект
-        if (data.users && Array.isArray(data.users)) {
+        if (data.jsonb_build_object && data.jsonb_build_object.users && Array.isArray(data.jsonb_build_object.users)) {
+          rawUsers = data.jsonb_build_object.users;
+          console.log('✅ Данные - объект с jsonb_build_object.users');
+        } else if (data.users && Array.isArray(data.users)) {
           rawUsers = data.users;
           console.log('✅ Данные - объект с users');
         } else if (data.json && data.json.users && Array.isArray(data.json.users)) {
@@ -3657,6 +3802,244 @@ const Dashboard: React.FC = () => {
     };
   }, [eventsData, comparisonTimeFilter]);
 
+  // Агрегированные данные TON заказов по датам
+  const aggregatedTonOrdersData = useMemo(() => {
+    if (!tonOrdersData || !tonOrdersData.users || tonOrdersData.users.length === 0) {
+      return null;
+    }
+
+    const formatDateDDMMYY = (dateStr: string | null) => {
+      if (!dateStr) return null;
+      const date = new Date(dateStr);
+      const dd = String(date.getUTCDate()).padStart(2, '0');
+      const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const yy = String(date.getUTCFullYear()).slice(-2);
+      return `${dd}.${mm}.${yy}`;
+    };
+
+    // Категории заказов
+    const categories = [
+      { key: 'ecos_5000', label: 'Ecos 5000', purchasesField: 'ecos_5000_purchases', tonField: 'ecos_5000_ton_spent', firstPurchaseField: 'ecos_5000_first_purchase', lastPurchaseField: 'ecos_5000_last_purchase', color: '#f97316' },
+      { key: 'ecos_10000', label: 'Ecos 10000', purchasesField: 'ecos_10000_purchases', tonField: 'ecos_10000_ton_spent', firstPurchaseField: 'ecos_10000_first_purchase', lastPurchaseField: 'ecos_10000_last_purchase', color: '#eab308' },
+      { key: 'ecos_100000', label: 'Ecos 100000', purchasesField: 'ecos_100000_purchases', tonField: 'ecos_100000_ton_spent', firstPurchaseField: 'ecos_100000_first_purchase', lastPurchaseField: 'ecos_100000_last_purchase', color: '#22c55e' },
+      { key: 'ecos_200000', label: 'Ecos 200000', purchasesField: 'ecos_200000_purchases', tonField: 'ecos_200000_ton_spent', firstPurchaseField: 'ecos_200000_first_purchase', lastPurchaseField: 'ecos_200000_last_purchase', color: '#3b82f6' },
+      { key: 'ecos_1000000', label: 'Ecos 1000000', purchasesField: 'ecos_1000000_purchases', tonField: 'ecos_1000000_ton_spent', firstPurchaseField: 'ecos_1000000_first_purchase', lastPurchaseField: 'ecos_1000000_last_purchase', color: '#8b5cf6' },
+      { key: 'premium_7d', label: 'Premium 7d', purchasesField: 'premium_7d_purchases', tonField: 'premium_7d_ton_spent', firstPurchaseField: 'premium_7d_first_purchase', lastPurchaseField: 'premium_7d_last_purchase', color: '#ec4899' },
+      { key: 'premium_30d', label: 'Premium 30d', purchasesField: 'premium_30d_purchases', tonField: 'premium_30d_ton_spent', firstPurchaseField: 'premium_30d_first_purchase', lastPurchaseField: 'premium_30d_last_purchase', color: '#f43f5e' },
+    ];
+
+    // Собираем все даты покупок
+    const datesMap = new Map<string, { [category: string]: { purchases: number; tonSpent: number } }>();
+
+    // Преобразуем строковые значения в числа для обработки
+    tonOrdersData.users.forEach(user => {
+      // Нормализуем числовые поля
+      const normalizeNumber = (val: any): number => {
+        if (val === null || val === undefined) return 0;
+        if (typeof val === 'string') return parseFloat(val) || 0;
+        return Number(val) || 0;
+      };
+      // Собираем все доступные даты покупок пользователя для использования в Premium категориях
+      const userPurchaseDates: string[] = [];
+      categories.forEach(category => {
+        if (category.firstPurchaseField && user[category.firstPurchaseField]) {
+          const date = formatDateDDMMYY(user[category.firstPurchaseField]);
+          if (date && !userPurchaseDates.includes(date)) {
+            userPurchaseDates.push(date);
+          }
+        }
+        if (category.lastPurchaseField && user[category.lastPurchaseField]) {
+          const date = formatDateDDMMYY(user[category.lastPurchaseField]);
+          if (date && !userPurchaseDates.includes(date)) {
+            userPurchaseDates.push(date);
+          }
+        }
+      });
+      // Сортируем даты
+      userPurchaseDates.sort((a, b) => {
+        const [ddA, mmA, yyA] = a.split('.').map(Number);
+        const [ddB, mmB, yyB] = b.split('.').map(Number);
+        return new Date(2000 + yyA, mmA - 1, ddA).getTime() - new Date(2000 + yyB, mmB - 1, ddB).getTime();
+      });
+
+      // Обрабатываем все категории одинаково (теперь у всех есть даты покупок)
+      categories.forEach(category => {
+        const purchases = normalizeNumber(user[category.purchasesField]);
+        const tonSpent = normalizeNumber(user[category.tonField]);
+
+        if (purchases > 0) {
+          let purchaseDate = null;
+          // Используем first_purchase, если есть, иначе last_purchase
+          if (category.firstPurchaseField && user[category.firstPurchaseField]) {
+            purchaseDate = formatDateDDMMYY(user[category.firstPurchaseField]);
+          } else if (category.lastPurchaseField && user[category.lastPurchaseField]) {
+            purchaseDate = formatDateDDMMYY(user[category.lastPurchaseField]);
+          }
+
+          if (purchaseDate) {
+            if (!datesMap.has(purchaseDate)) {
+              datesMap.set(purchaseDate, {});
+            }
+            const dayData = datesMap.get(purchaseDate)!;
+            if (!dayData[category.key]) {
+              dayData[category.key] = { purchases: 0, tonSpent: 0 };
+            }
+            dayData[category.key].purchases += purchases;
+            dayData[category.key].tonSpent += tonSpent;
+          }
+        }
+      });
+    });
+
+    // Преобразуем в массив и сортируем по дате
+    const sortedDates = Array.from(datesMap.keys()).sort((a, b) => {
+      const [ddA, mmA, yyA] = a.split('.').map(Number);
+      const [ddB, mmB, yyB] = b.split('.').map(Number);
+      const dateA = new Date(2000 + yyA, mmA - 1, ddA).getTime();
+      const dateB = new Date(2000 + yyB, mmB - 1, ddB).getTime();
+      return dateA - dateB;
+    });
+
+    // Создаем данные для графика
+    const chartData = sortedDates.map(date => {
+      const dayData = datesMap.get(date)!;
+      const result: { date: string; [key: string]: any } = { date };
+      categories.forEach(category => {
+        if (dayData[category.key]) {
+          result[`${category.key}_purchases`] = dayData[category.key].purchases;
+          result[`${category.key}_ton`] = dayData[category.key].tonSpent;
+        } else {
+          result[`${category.key}_purchases`] = 0;
+          result[`${category.key}_ton`] = 0;
+        }
+      });
+      return result;
+    });
+
+    // Вычисляем сводку по категориям
+    const normalizeNumber = (val: any): number => {
+      if (val === null || val === undefined) return 0;
+      if (typeof val === 'string') return parseFloat(val) || 0;
+      return Number(val) || 0;
+    };
+
+    const summary = categories.map(category => {
+      const totalPurchases = tonOrdersData.users.reduce((sum, user) => sum + normalizeNumber(user[category.purchasesField]), 0);
+      const totalTonSpent = tonOrdersData.users.reduce((sum, user) => sum + normalizeNumber(user[category.tonField]), 0);
+      return {
+        ...category,
+        totalPurchases,
+        totalTonSpent
+      };
+    });
+
+    return {
+      dates: sortedDates,
+      chartData,
+      categories,
+      summary
+    };
+  }, [tonOrdersData]);
+
+  // Фильтрованные данные TON заказов по времени
+  const filteredTonOrdersData = useMemo(() => {
+    if (!aggregatedTonOrdersData) return null;
+
+    const formatDateDDMMYY = (date: Date) => {
+      const dd = String(date.getUTCDate()).padStart(2, '0');
+      const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const yy = String(date.getUTCFullYear()).slice(-2);
+      return `${dd}.${mm}.${yy}`;
+    };
+
+    const aggregateData = (data: typeof aggregatedTonOrdersData.chartData, filter: 'all' | '7' | '30') => {
+      if (filter === '7') {
+        // Группировка по неделям
+        const countsByWeek = new Map<string, { [key: string]: any }>();
+        
+        data.forEach(day => {
+          const [dayStr, monthStr, yearStr] = day.date.split('.');
+          const dayDate = new Date(2000 + parseInt(yearStr), parseInt(monthStr) - 1, parseInt(dayStr));
+          
+          const weekStart = new Date(dayDate);
+          weekStart.setUTCDate(dayDate.getUTCDate() - dayDate.getUTCDay());
+          const weekEnd = new Date(weekStart);
+          weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+          
+          const weekKey = `${formatDateDDMMYY(weekStart)}–${formatDateDDMMYY(weekEnd)}`;
+          
+          if (!countsByWeek.has(weekKey)) {
+            const weekData: { [key: string]: any } = { date: weekKey };
+            aggregatedTonOrdersData.categories.forEach(cat => {
+              weekData[`${cat.key}_purchases`] = 0;
+              weekData[`${cat.key}_ton`] = 0;
+            });
+            countsByWeek.set(weekKey, weekData);
+          }
+          const weekData = countsByWeek.get(weekKey)!;
+          aggregatedTonOrdersData.categories.forEach(cat => {
+            weekData[`${cat.key}_purchases`] += day[`${cat.key}_purchases`] || 0;
+            weekData[`${cat.key}_ton`] += day[`${cat.key}_ton`] || 0;
+          });
+        });
+        
+        return Array.from(countsByWeek.values())
+          .sort((a, b) => {
+            const [startA] = a.date.split('–');
+            const [startB] = b.date.split('–');
+            const [ddA, mmA, yyA] = startA.split('.').map(Number);
+            const [ddB, mmB, yyB] = startB.split('.').map(Number);
+            return new Date(2000 + yyA, mmA - 1, ddA).getTime() - new Date(2000 + yyB, mmB - 1, ddB).getTime();
+          });
+      } else if (filter === '30') {
+        // Группировка по месяцам
+        const countsByMonth = new Map<string, { [key: string]: any }>();
+        
+        data.forEach(day => {
+          const [dayStr, monthStr, yearStr] = day.date.split('.');
+          const dayDate = new Date(2000 + parseInt(yearStr), parseInt(monthStr) - 1, parseInt(dayStr));
+          
+          const mm = String(dayDate.getUTCMonth() + 1).padStart(2, '0');
+          const yy = String(dayDate.getUTCFullYear()).slice(-2);
+          const monthKey = `${mm}.${yy}`;
+          
+          if (!countsByMonth.has(monthKey)) {
+            const monthData: { [key: string]: any } = { date: monthKey };
+            aggregatedTonOrdersData.categories.forEach(cat => {
+              monthData[`${cat.key}_purchases`] = 0;
+              monthData[`${cat.key}_ton`] = 0;
+            });
+            countsByMonth.set(monthKey, monthData);
+          }
+          const monthData = countsByMonth.get(monthKey)!;
+          aggregatedTonOrdersData.categories.forEach(cat => {
+            monthData[`${cat.key}_purchases`] += day[`${cat.key}_purchases`] || 0;
+            monthData[`${cat.key}_ton`] += day[`${cat.key}_ton`] || 0;
+          });
+        });
+        
+        return Array.from(countsByMonth.values())
+          .map((monthData) => {
+            const [mm, yy] = monthData.date.split('.').map(Number);
+            const startTime = new Date(2000 + yy, mm - 1, 1).getTime();
+            return { ...monthData, _startTime: startTime };
+          })
+          .sort((a, b) => a._startTime - b._startTime)
+          .map(({ _startTime, ...rest }) => rest);
+      }
+      
+      return data;
+    };
+
+    const filteredChartData = aggregateData(aggregatedTonOrdersData.chartData, tonOrdersTimeFilter);
+
+    return {
+      ...aggregatedTonOrdersData,
+      chartData: filteredChartData,
+      dates: filteredChartData.map(d => d.date)
+    };
+  }, [aggregatedTonOrdersData, tonOrdersTimeFilter]);
+
   // Фильтрованные данные для модального окна
   const filteredModalData = useMemo(() => {
     if (!selectedEventModal) return null;
@@ -5105,6 +5488,639 @@ const Dashboard: React.FC = () => {
                   />
                 </div>
               </div>
+            )}
+            
+            {/* TON Orders Chart */}
+            {tonOrdersData && (
+              filteredTonOrdersData && filteredTonOrdersData.chartData.length > 0 ? (
+              <div className="neu-card p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="neu-inset p-2">
+                      <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>TON Orders Statistics</h3>
+                      <p className="text-sm text-gray-400">Purchase statistics by category</p>
+                    </div>
+                  </div>
+
+                  {/* Time Filter Buttons, Chart Type Toggle and Clear All */}
+                  <div className="flex gap-2 items-center">
+                    {[
+                      { key: 'all', label: '1D' },
+                      { key: '7', label: '1W' },
+                      { key: '30', label: '1M' }
+                    ].map(({ key, label }) => (
+                      <button
+                        key={key}
+                        onClick={() => setTonOrdersTimeFilter(key as 'all' | '7' | '30')}
+                        className={tonOrdersTimeFilter === key ? 'neu-btn-filter-active' : 'neu-btn-filter'}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                    <div className="h-6 w-px bg-gray-600 mx-1" />
+                    <button
+                      onClick={() => setTonOrdersChartType(tonOrdersChartType === 'line' ? 'bar' : 'line')}
+                      className="neu-btn-filter"
+                      title={tonOrdersChartType === 'line' ? 'Switch to Bar Chart' : 'Switch to Line Chart'}
+                    >
+                      {tonOrdersChartType === 'line' ? (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                        </svg>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setSelectedTonCategories(new Set())}
+                      className="neu-btn-filter"
+                      title="Clear all selections"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Category Checkboxes */}
+                {filteredTonOrdersData.categories && (
+                  <div className="mb-6 p-4 neu-inset rounded-lg">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                      {filteredTonOrdersData.categories.map((category) => {
+                        const isSelected = selectedTonCategories.has(category.key);
+                        
+                        return (
+                          <label
+                            key={category.key}
+                            className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const newSelected = new Set(selectedTonCategories);
+                                if (e.target.checked) {
+                                  newSelected.add(category.key);
+                                } else {
+                                  newSelected.delete(category.key);
+                                }
+                                setSelectedTonCategories(newSelected);
+                              }}
+                              className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-orange-500 focus:ring-orange-500 focus:ring-2"
+                              style={{ accentColor: category.color }}
+                            />
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: category.color }} />
+                              <span className={`text-xs truncate ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{category.label}</span>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Summary Cards */}
+                {filteredTonOrdersData.summary && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+                    {filteredTonOrdersData.summary.map((category) => (
+                      <div key={category.key} className="neu-card-sm p-4 flex flex-col h-full">
+                        <div className={`text-xs font-medium mb-3 min-h-[2rem] flex items-start ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {category.label}
+                        </div>
+                        <div className="flex-1 flex flex-col justify-center">
+                          <div className="text-2xl font-bold mb-1" style={{ color: category.color }}>
+                            {category.totalPurchases}
+                          </div>
+                          <div className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {category.totalTonSpent.toFixed(2)} TON
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Chart */}
+                <div className="h-80">
+                  {tonOrdersChartType === 'line' ? (
+                    <Line
+                      data={{
+                        labels: filteredTonOrdersData.dates,
+                        datasets: selectedTonCategories.size > 0 
+                          ? filteredTonOrdersData.categories
+                              .filter(category => selectedTonCategories.has(category.key))
+                              .map(category => ({
+                                label: category.label,
+                                data: filteredTonOrdersData.chartData.map(day => day[`${category.key}_purchases`] || 0),
+                                borderColor: category.color,
+                                backgroundColor: `${category.color}20`,
+                                borderWidth: 2,
+                                fill: false,
+                                tension: 0.4,
+                                pointBackgroundColor: category.color,
+                                pointBorderColor: isDark ? '#ffffff' : '#ffffff',
+                                pointBorderWidth: 2,
+                                pointRadius: 3,
+                                pointHoverRadius: 5,
+                              }))
+                          : []
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            display: selectedTonCategories.size > 0,
+                            position: 'top',
+                            labels: {
+                              color: isDark ? '#ffffff' : '#000000',
+                              padding: 15,
+                              usePointStyle: true,
+                              font: {
+                                size: 11
+                              }
+                            }
+                          },
+                          tooltip: {
+                            backgroundColor: isDark ? '#374151' : '#ffffff',
+                            titleColor: isDark ? '#ffffff' : '#000000',
+                            bodyColor: isDark ? '#ffffff' : '#000000',
+                            borderColor: isDark ? '#4b5563' : '#e5e7eb',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            displayColors: true,
+                            callbacks: {
+                              title: function(context) {
+                                return `📅 ${context[0].label}`;
+                              },
+                              label: function(context) {
+                                const category = filteredTonOrdersData.categories.find(c => c.label === context.dataset.label);
+                                const tonValue = filteredTonOrdersData.chartData[context.dataIndex]?.[`${category?.key}_ton`] || 0;
+                                return `${context.dataset.label}: ${context.parsed.y} покупок (${tonValue.toFixed(2)} TON)`;
+                              }
+                            }
+                          }
+                        },
+                        scales: {
+                          x: {
+                            grid: {
+                              color: isDark ? '#374151' : '#f3f4f6',
+                              drawBorder: false
+                            },
+                            ticks: {
+                              color: isDark ? '#9ca3af' : '#6b7280',
+                              font: {
+                                size: 11
+                              },
+                              maxRotation: 45,
+                              minRotation: 45
+                            }
+                          },
+                          y: {
+                            beginAtZero: true,
+                            grid: {
+                              color: isDark ? '#374151' : '#f3f4f6',
+                              drawBorder: false
+                            },
+                            ticks: {
+                              color: isDark ? '#9ca3af' : '#6b7280',
+                              font: {
+                                size: 11
+                              },
+                              callback: function(value) {
+                                return Number(value).toLocaleString('ru-RU');
+                              }
+                            }
+                          }
+                        },
+                        interaction: {
+                          intersect: false,
+                          mode: 'index'
+                        }
+                      }}
+                    />
+                  ) : (
+                    <Bar
+                      data={{
+                        labels: filteredTonOrdersData.dates,
+                        datasets: selectedTonCategories.size > 0 
+                          ? filteredTonOrdersData.categories
+                              .filter(category => selectedTonCategories.has(category.key))
+                              .map(category => ({
+                                label: category.label,
+                                data: filteredTonOrdersData.chartData.map(day => day[`${category.key}_purchases`] || 0),
+                                backgroundColor: category.color,
+                                borderColor: category.color,
+                                borderWidth: 1,
+                              }))
+                          : []
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            display: selectedTonCategories.size > 0,
+                            position: 'top',
+                            labels: {
+                              color: isDark ? '#ffffff' : '#000000',
+                              padding: 15,
+                              usePointStyle: true,
+                              font: {
+                                size: 11
+                              }
+                            }
+                          },
+                          tooltip: {
+                            backgroundColor: isDark ? '#374151' : '#ffffff',
+                            titleColor: isDark ? '#ffffff' : '#000000',
+                            bodyColor: isDark ? '#ffffff' : '#000000',
+                            borderColor: isDark ? '#4b5563' : '#e5e7eb',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            displayColors: true,
+                            callbacks: {
+                              title: function(context) {
+                                return `📅 ${context[0].label}`;
+                              },
+                              label: function(context) {
+                                const category = filteredTonOrdersData.categories.find(c => c.label === context.dataset.label);
+                                const tonValue = filteredTonOrdersData.chartData[context.dataIndex]?.[`${category?.key}_ton`] || 0;
+                                const totalPurchases = context.dataset.data.reduce((sum: number, val: any, idx: number) => {
+                                  if (idx === context.dataIndex) return sum;
+                                  return sum + (val || 0);
+                                }, 0);
+                                return `${context.dataset.label}: ${context.parsed.y} покупок (${tonValue.toFixed(2)} TON)`;
+                              },
+                              footer: function(tooltipItems) {
+                                const total = tooltipItems.reduce((sum, item) => sum + (item.parsed.y || 0), 0);
+                                const totalTon = tooltipItems.reduce((sum, item) => {
+                                  const category = filteredTonOrdersData.categories.find(c => c.label === item.dataset.label);
+                                  const tonValue = filteredTonOrdersData.chartData[item.dataIndex]?.[`${category?.key}_ton`] || 0;
+                                  return sum + tonValue;
+                                }, 0);
+                                return `Всего: ${total} покупок (${totalTon.toFixed(2)} TON)`;
+                              }
+                            }
+                          }
+                        },
+                        scales: {
+                          x: {
+                            stacked: true,
+                            grid: {
+                              color: isDark ? '#374151' : '#f3f4f6',
+                              drawBorder: false
+                            },
+                            ticks: {
+                              color: isDark ? '#9ca3af' : '#6b7280',
+                              font: {
+                                size: 11
+                              },
+                              maxRotation: 45,
+                              minRotation: 45
+                            }
+                          },
+                          y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            grid: {
+                              color: isDark ? '#374151' : '#f3f4f6',
+                              drawBorder: false
+                            },
+                            ticks: {
+                              color: isDark ? '#9ca3af' : '#6b7280',
+                              font: {
+                                size: 11
+                              },
+                              callback: function(value) {
+                                return Number(value).toLocaleString('ru-RU');
+                              }
+                            }
+                          }
+                        },
+                        interaction: {
+                          intersect: false,
+                          mode: 'index'
+                        }
+                      }}
+                    />
+                  )}
+                </div>
+
+                {/* Total TON Card */}
+                {tonOrdersData && (
+                  <div className="mt-6">
+                    <div className="neu-card p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="neu-inset p-2">
+                            <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                            <div className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                              Total заработанных TON
+                            </div>
+                            <div className="text-3xl font-bold text-emerald-500 mt-1">
+                              {Number(tonOrdersData.global_total_ton_received).toFixed(2)} TON
+                            </div>
+                          </div>
+                        </div>
+                        <div className={`text-right ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          <div className="text-xs">За все время</div>
+                          <div className="text-sm font-semibold mt-1">
+                            {tonOrdersData.users.length} пользователей
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Users List */}
+                {tonOrdersData && tonOrdersData.users.length > 0 && (
+                  <div className="mt-6">
+                    <div className="neu-card p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="neu-inset p-1.5">
+                          <Users className="w-4 h-4 text-blue-400" />
+                        </div>
+                        <h3 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          Пользователи с покупками TON ({tonOrdersData.users.length})
+                      </h3>
+                    </div>
+                      
+                      <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                        {tonOrdersData.users.map((user, index) => {
+                          const normalizeNumber = (val: any): number => {
+                            if (val === null || val === undefined) return 0;
+                            if (typeof val === 'string') return parseFloat(val) || 0;
+                            return Number(val) || 0;
+                          };
+
+                          const formatDate = (dateStr: string | null): string => {
+                            if (!dateStr) return '-';
+                            try {
+                              const date = new Date(dateStr);
+                              const dd = String(date.getUTCDate()).padStart(2, '0');
+                              const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+                              const yy = String(date.getUTCFullYear()).slice(-2);
+                              return `${dd}.${mm}.${yy}`;
+                            } catch {
+                              return '-';
+                            }
+                          };
+
+                          const userTotalTon = normalizeNumber(user.user_total_ton_spent);
+                          const displayName = user.username 
+                            ? `@${user.username}` 
+                            : user.first_name 
+                              ? `${user.first_name} ${user.last_name || ''}`.trim()
+                              : `User #${user.person_id}`;
+                          
+                          // Собираем информацию о покупках с датами
+                          const purchases = [
+                            { 
+                              key: 'ecos_5000',
+                              label: 'Ecos 5000', 
+                              shortLabel: '5000',
+                              count: normalizeNumber(user.ecos_5000_purchases), 
+                              ton: normalizeNumber(user.ecos_5000_ton_spent), 
+                              firstDate: formatDate(user.ecos_5000_first_purchase),
+                              lastDate: formatDate(user.ecos_5000_last_purchase),
+                              color: '#f97316' 
+                            },
+                            { 
+                              key: 'ecos_10000',
+                              label: 'Ecos 10000', 
+                              shortLabel: '10000',
+                              count: normalizeNumber(user.ecos_10000_purchases), 
+                              ton: normalizeNumber(user.ecos_10000_ton_spent), 
+                              firstDate: formatDate(user.ecos_10000_first_purchase),
+                              lastDate: formatDate(user.ecos_10000_last_purchase),
+                              color: '#eab308' 
+                            },
+                            { 
+                              key: 'ecos_100000',
+                              label: 'Ecos 100000', 
+                              shortLabel: '100K',
+                              count: normalizeNumber(user.ecos_100000_purchases), 
+                              ton: normalizeNumber(user.ecos_100000_ton_spent), 
+                              firstDate: formatDate(user.ecos_100000_first_purchase),
+                              lastDate: formatDate(user.ecos_100000_last_purchase),
+                              color: '#22c55e' 
+                            },
+                            { 
+                              key: 'ecos_200000',
+                              label: 'Ecos 200000', 
+                              shortLabel: '200K',
+                              count: normalizeNumber(user.ecos_200000_purchases), 
+                              ton: normalizeNumber(user.ecos_200000_ton_spent), 
+                              firstDate: formatDate(user.ecos_200000_first_purchase),
+                              lastDate: formatDate(user.ecos_200000_last_purchase),
+                              color: '#3b82f6' 
+                            },
+                            { 
+                              key: 'ecos_1000000',
+                              label: 'Ecos 1000000', 
+                              shortLabel: '1M',
+                              count: normalizeNumber(user.ecos_1000000_purchases), 
+                              ton: normalizeNumber(user.ecos_1000000_ton_spent), 
+                              firstDate: formatDate(user.ecos_1000000_first_purchase),
+                              lastDate: formatDate(user.ecos_1000000_last_purchase),
+                              color: '#8b5cf6' 
+                            },
+                            { 
+                              key: 'premium_7d',
+                              label: 'Premium 7d', 
+                              shortLabel: 'P7d',
+                              count: normalizeNumber(user.premium_7d_purchases), 
+                              ton: normalizeNumber(user.premium_7d_ton_spent), 
+                              firstDate: formatDate(user.premium_7d_first_purchase),
+                              lastDate: formatDate(user.premium_7d_last_purchase),
+                              color: '#ec4899' 
+                            },
+                            { 
+                              key: 'premium_30d',
+                              label: 'Premium 30d', 
+                              shortLabel: 'P30d',
+                              count: normalizeNumber(user.premium_30d_purchases), 
+                              ton: normalizeNumber(user.premium_30d_ton_spent), 
+                              firstDate: formatDate(user.premium_30d_first_purchase),
+                              lastDate: formatDate(user.premium_30d_last_purchase),
+                              color: '#f43f5e' 
+                            },
+                          ].filter(p => p.count > 0);
+
+                          return (
+                            <div 
+                              key={user.person_id}
+                              className={`neu-card-sm p-4 ${isDark ? 'bg-gray-700/30' : 'bg-gray-50/50'}`}
+                            >
+                              {/* Верхняя часть: информация о пользователе */}
+                              <div className="flex items-start justify-between mb-3 pb-3 border-b border-gray-600/30 dark:border-gray-400/30">
+                                <div className="flex items-start gap-3 flex-1 min-w-0">
+                                  {/* Фото пользователя */}
+                                  {user.photo_url ? (
+                                    <img 
+                                      src={user.photo_url} 
+                                      alt={displayName}
+                                      className="w-12 h-12 rounded-full flex-shrink-0 object-cover border-2"
+                                      style={{ borderColor: isDark ? '#4b5563' : '#e5e7eb' }}
+                                      onError={(e) => {
+                                        // Fallback если фото не загрузилось
+                                        const target = e.target as HTMLImageElement;
+                                        target.style.display = 'none';
+                                      }}
+                                    />
+                                  ) : (
+                                    <div className={`flex items-center justify-center w-12 h-12 rounded-full font-bold text-sm flex-shrink-0 ${
+                                      isDark ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-600'
+                                    }`}>
+                                      {displayName.charAt(0).toUpperCase()}
+                  </div>
+                                  )}
+                                  
+                                  <div className="min-w-0 flex-1">
+                                    <div className={`font-semibold text-base ${isDark ? 'text-gray-200' : 'text-gray-700'} truncate`}>
+                                      {displayName}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                      <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                        ID: {user.person_id}
+                                      </span>
+                                      {user.tg_language && (
+                                        <span className={`${isDark ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-600'} px-2 py-0.5 rounded text-xs font-semibold uppercase`}>
+                                          {user.tg_language}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {user.wallet_address && (
+                                      <div className="flex items-center gap-1.5 mt-2">
+                                        <Wallet className={`w-3 h-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                                        <code 
+                                          className={`text-xs font-mono ${isDark ? 'text-emerald-400' : 'text-emerald-600'} px-2 py-0.5 rounded ${
+                                            isDark ? 'bg-gray-600/50' : 'bg-emerald-50'
+                                          }`}
+                                          title={user.wallet_address}
+                                        >
+                                          {user.wallet_address.length > 20 
+                                            ? `${user.wallet_address.slice(0, 8)}...${user.wallet_address.slice(-8)}`
+                                            : user.wallet_address}
+                                        </code>
+                      <button
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(user.wallet_address!);
+                                            alert('Адрес кошелька скопирован!');
+                                          }}
+                                          className={`p-1 rounded transition-colors ${
+                                            isDark ? 'hover:bg-gray-600 text-gray-400 hover:text-gray-200' : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
+                                          }`}
+                                          title="Скопировать адрес"
+                                        >
+                                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                <div className={`text-right flex-shrink-0 ml-4 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                  <div className="text-xs font-medium mb-1">Всего потрачено</div>
+                                  <div className="text-xl font-bold">
+                                    {userTotalTon.toFixed(2)} TON
+                                  </div>
+                                </div>
+                          </div>
+                          
+                              {/* Нижняя часть: детали покупок */}
+                              {purchases.length > 0 && (
+                                <div className="space-y-2">
+                                  {purchases.map((purchase) => {
+                                    const dateDisplay = purchase.firstDate !== '-' && purchase.lastDate !== '-' && purchase.firstDate === purchase.lastDate
+                                      ? purchase.firstDate
+                                      : purchase.firstDate !== '-' && purchase.lastDate !== '-'
+                                        ? `${purchase.firstDate} - ${purchase.lastDate}`
+                                        : purchase.firstDate !== '-'
+                                          ? purchase.firstDate
+                                          : purchase.lastDate !== '-'
+                                            ? purchase.lastDate
+                                            : null;
+
+                                    return (
+                                      <div 
+                                        key={purchase.key}
+                                        className={`grid grid-cols-12 gap-3 items-center p-2.5 rounded-lg ${
+                                          isDark ? 'bg-gray-600/30' : 'bg-gray-100/50'
+                                        }`}
+                                      >
+                                        {/* Цветной индикатор и название */}
+                                        <div className="col-span-4 flex items-center gap-2 min-w-0">
+                                          <div 
+                                            className="w-3 h-3 rounded-full flex-shrink-0" 
+                                            style={{ backgroundColor: purchase.color }}
+                                          />
+                                          <div className="min-w-0">
+                                            <div className={`font-medium text-sm truncate ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+                                              {purchase.label}
+                        </div>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Дата покупки */}
+                                        <div className="col-span-4">
+                                          {dateDisplay ? (
+                                            <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                              {dateDisplay}
+                                            </div>
+                                          ) : (
+                                            <div className={`text-xs italic ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                                              Дата не указана
+                                            </div>
+                                          )}
+                                        </div>
+                                        
+                                        {/* Количество и сумма */}
+                                        <div className="col-span-4 text-right">
+                                          <div className={`text-sm font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                                            {purchase.count} {purchase.count === 1 ? 'шт' : 'шт'}
+                                          </div>
+                                          <div className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                            {purchase.ton.toFixed(2)} TON
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              ) : (
+                <div className="neu-card p-6">
+                  <div className="text-center py-8">
+                    <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Нет данных для отображения графика TON заказов
+                    </p>
+                  </div>
+                </div>
+              )
             )}
             
             {/* All Events Correlation Chart */}
@@ -9621,69 +10637,69 @@ const Dashboard: React.FC = () => {
             
             {/* Статистика */}
             {filteredComparisonData && (
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                  <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Запущено</div>
-                  <div className="text-3xl font-bold text-orange-600">
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Запущено</div>
+                <div className="text-3xl font-bold text-orange-600">
                     {filteredComparisonData.started.reduce((sum: number, day: any) => sum + day.count, 0)}
-                  </div>
-                </div>
-                <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                  <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Собрано</div>
-                  <div className="text-3xl font-bold text-emerald-600">
-                    {filteredComparisonData.claimed.reduce((sum: number, day: any) => sum + day.count, 0)}
-                  </div>
-                </div>
-                <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                  <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Процент сбора</div>
-                  <div className="text-3xl font-bold text-emerald-600">
-                    {(() => {
-                      const totalStarted = filteredComparisonData.started.reduce((sum: number, day: any) => sum + day.count, 0);
-                      const totalClaimed = filteredComparisonData.claimed.reduce((sum: number, day: any) => sum + day.count, 0);
-                      return totalStarted > 0 ? ((totalClaimed / totalStarted) * 100).toFixed(1) : '0';
-                    })()}%
-                  </div>
                 </div>
               </div>
+              <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Собрано</div>
+                <div className="text-3xl font-bold text-emerald-600">
+                    {filteredComparisonData.claimed.reduce((sum: number, day: any) => sum + day.count, 0)}
+                </div>
+              </div>
+              <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Процент сбора</div>
+                <div className="text-3xl font-bold text-emerald-600">
+                  {(() => {
+                      const totalStarted = filteredComparisonData.started.reduce((sum: number, day: any) => sum + day.count, 0);
+                      const totalClaimed = filteredComparisonData.claimed.reduce((sum: number, day: any) => sum + day.count, 0);
+                    return totalStarted > 0 ? ((totalClaimed / totalStarted) * 100).toFixed(1) : '0';
+                  })()}%
+                </div>
+              </div>
+            </div>
             )}
             
             {/* Большой график */}
             {filteredComparisonData && (
-              <div className="h-96">
-                <Line
-                  data={{
+            <div className="h-96">
+              <Line
+                data={{
                     labels: filteredComparisonData.dates,
-                    datasets: [
-                      {
-                        label: 'Майнинг запущен',
+                  datasets: [
+                    {
+                      label: 'Майнинг запущен',
                         data: filteredComparisonData.started.map((d: any) => d.count),
-                        borderColor: '#f97316',
-                        backgroundColor: 'rgba(249, 115, 22, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        pointBackgroundColor: '#f97316',
-                        pointBorderColor: isDark ? '#ffffff' : '#ffffff',
-                        pointBorderWidth: 2,
-                        pointRadius: 6,
-                        pointHoverRadius: 8,
-                      },
-                      {
-                        label: 'Майнинг собран',
+                      borderColor: '#f97316',
+                      backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                      borderWidth: 3,
+                      fill: true,
+                      tension: 0.4,
+                      pointBackgroundColor: '#f97316',
+                      pointBorderColor: isDark ? '#ffffff' : '#ffffff',
+                      pointBorderWidth: 2,
+                      pointRadius: 6,
+                      pointHoverRadius: 8,
+                    },
+                    {
+                      label: 'Майнинг собран',
                         data: filteredComparisonData.claimed.map((d: any) => d.count),
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        pointBackgroundColor: '#10b981',
-                        pointBorderColor: isDark ? '#ffffff' : '#ffffff',
-                        pointBorderWidth: 2,
-                        pointRadius: 6,
-                        pointHoverRadius: 8,
-                      }
-                    ]
-                  }}
+                      borderColor: '#10b981',
+                      backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                      borderWidth: 3,
+                      fill: true,
+                      tension: 0.4,
+                      pointBackgroundColor: '#10b981',
+                      pointBorderColor: isDark ? '#ffffff' : '#ffffff',
+                      pointBorderWidth: 2,
+                      pointRadius: 6,
+                      pointHoverRadius: 8,
+                    }
+                  ]
+                }}
                 options={{
                   responsive: true,
                   maintainAspectRatio: false,
@@ -9755,6 +10771,7 @@ const Dashboard: React.FC = () => {
                 }}
               />
             </div>
+            )}
           </div>
         </div>
       )}
