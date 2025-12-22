@@ -3553,6 +3553,110 @@ const Dashboard: React.FC = () => {
     };
   }, [eventsData, correlationTimeFilter]);
 
+  // Фильтрованные данные для графика сравнения майнинга
+  const filteredComparisonData = useMemo(() => {
+    if (!eventsData || !eventsData.events['mining_started'] || !eventsData.events['mining_claimed']) {
+      return null;
+    }
+
+    const formatDateDDMMYY = (date: Date) => {
+      const dd = String(date.getUTCDate()).padStart(2, '0');
+      const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const yy = String(date.getUTCFullYear()).slice(-2);
+      return `${dd}.${mm}.${yy}`;
+    };
+
+    const aggregateData = (data: { date: string; count: number }[], filter: 'all' | '7' | '30') => {
+      if (filter === '7') {
+        // Группировка по неделям
+        const countsByWeek = new Map<string, { count: number; weekStart: Date; weekEnd: Date }>();
+        
+        data.forEach(day => {
+          const [dayStr, monthStr, yearStr] = day.date.split('.');
+          const dayDate = new Date(2000 + parseInt(yearStr), parseInt(monthStr) - 1, parseInt(dayStr));
+          
+          const weekStart = new Date(dayDate);
+          weekStart.setUTCDate(dayDate.getUTCDate() - dayDate.getUTCDay());
+          const weekEnd = new Date(weekStart);
+          weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+          
+          const weekKey = `${formatDateDDMMYY(weekStart)}–${formatDateDDMMYY(weekEnd)}`;
+          
+          if (!countsByWeek.has(weekKey)) {
+            countsByWeek.set(weekKey, { count: 0, weekStart, weekEnd });
+          }
+          const weekData = countsByWeek.get(weekKey)!;
+          weekData.count += day.count;
+        });
+        
+        return Array.from(countsByWeek.values())
+          .sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime())
+          .map(data => ({
+            date: `${formatDateDDMMYY(data.weekStart)}–${formatDateDDMMYY(data.weekEnd)}`,
+            count: data.count
+          }));
+      } else if (filter === '30') {
+        // Группировка по месяцам
+        const countsByMonth = new Map<string, number>();
+        
+        data.forEach(day => {
+          const [dayStr, monthStr, yearStr] = day.date.split('.');
+          const dayDate = new Date(2000 + parseInt(yearStr), parseInt(monthStr) - 1, parseInt(dayStr));
+          
+          const mm = String(dayDate.getUTCMonth() + 1).padStart(2, '0');
+          const yy = String(dayDate.getUTCFullYear()).slice(-2);
+          const monthKey = `${mm}.${yy}`;
+          
+          countsByMonth.set(monthKey, (countsByMonth.get(monthKey) || 0) + day.count);
+        });
+        
+        return Array.from(countsByMonth.entries())
+          .map(([month, count]) => {
+            const [mm, yy] = month.split('.').map(Number);
+            const startTime = new Date(2000 + yy, mm - 1, 1).getTime();
+            return { date: month, count, _startTime: startTime };
+          })
+          .sort((a, b) => a._startTime - b._startTime)
+          .map(({ date, count }) => ({ date, count }));
+      }
+      
+      return data;
+    };
+
+    const filteredStarted = aggregateData(eventsData.events['mining_started'], comparisonTimeFilter);
+    const filteredClaimed = aggregateData(eventsData.events['mining_claimed'], comparisonTimeFilter);
+
+    // Получаем общие даты для обоих событий
+    const allDates = new Set<string>();
+    filteredStarted.forEach(day => allDates.add(day.date));
+    filteredClaimed.forEach(day => allDates.add(day.date));
+    
+    const sortedDates = Array.from(allDates).sort((a, b) => {
+      const parseDate = (dateStr: string) => {
+        if (dateStr.includes('–')) {
+          const [start] = dateStr.split('–');
+          const [dd, mm, yy] = start.split('.');
+          return new Date(2000 + parseInt(yy), parseInt(mm) - 1, parseInt(dd)).getTime();
+        } else if (dateStr.includes('.')) {
+          const [mm, yy] = dateStr.split('.');
+          return new Date(2000 + parseInt(yy), parseInt(mm) - 1, 1).getTime();
+        }
+        return 0;
+      };
+      return parseDate(a) - parseDate(b);
+    });
+
+    // Создаем мапы для быстрого доступа
+    const startedMap = new Map(filteredStarted.map(d => [d.date, d.count]));
+    const claimedMap = new Map(filteredClaimed.map(d => [d.date, d.count]));
+
+    return {
+      dates: sortedDates,
+      started: sortedDates.map(date => ({ date, count: startedMap.get(date) || 0 })),
+      claimed: sortedDates.map(date => ({ date, count: claimedMap.get(date) || 0 }))
+    };
+  }, [eventsData, comparisonTimeFilter]);
+
   // Фильтрованные данные для модального окна
   const filteredModalData = useMemo(() => {
     if (!selectedEventModal) return null;
@@ -9485,7 +9589,7 @@ const Dashboard: React.FC = () => {
                 </h3>
               </div>
               <button
-                onClick={() => setComparisonModalOpen(false)}
+                onClick={() => { setComparisonModalOpen(false); setComparisonTimeFilter('all'); }}
                 className={`p-2 rounded-lg transition-colors ${
                   isDark 
                     ? 'hover:bg-gray-700 text-gray-300' 
@@ -9497,69 +9601,89 @@ const Dashboard: React.FC = () => {
                 </svg>
               </button>
             </div>
-            
-            {/* Статистика */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Запущено</div>
-                <div className="text-3xl font-bold text-orange-600">
-                  {eventsData.events['mining_started'].reduce((sum: number, day: any) => sum + day.count, 0)}
-                </div>
-              </div>
-              <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Собрано</div>
-                <div className="text-3xl font-bold text-emerald-600">
-                  {eventsData.events['mining_claimed'].reduce((sum: number, day: any) => sum + day.count, 0)}
-                </div>
-              </div>
-              <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Процент сбора</div>
-                <div className="text-3xl font-bold text-emerald-600">
-                  {(() => {
-                    const totalStarted = eventsData.events['mining_started'].reduce((sum: number, day: any) => sum + day.count, 0);
-                    const totalClaimed = eventsData.events['mining_claimed'].reduce((sum: number, day: any) => sum + day.count, 0);
-                    return totalStarted > 0 ? ((totalClaimed / totalStarted) * 100).toFixed(1) : '0';
-                  })()}%
-                </div>
-              </div>
+
+            {/* Filter buttons */}
+            <div className="flex gap-2 mb-6">
+              {[
+                { key: 'all', label: '1D' },
+                { key: '7', label: '1W' },
+                { key: '30', label: '1M' }
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setComparisonTimeFilter(key as 'all' | '7' | '30')}
+                  className={comparisonTimeFilter === key ? 'neu-btn-filter-active' : 'neu-btn-filter'}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
             
+            {/* Статистика */}
+            {filteredComparisonData && (
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                  <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Запущено</div>
+                  <div className="text-3xl font-bold text-orange-600">
+                    {filteredComparisonData.started.reduce((sum: number, day: any) => sum + day.count, 0)}
+                  </div>
+                </div>
+                <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                  <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Собрано</div>
+                  <div className="text-3xl font-bold text-emerald-600">
+                    {filteredComparisonData.claimed.reduce((sum: number, day: any) => sum + day.count, 0)}
+                  </div>
+                </div>
+                <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                  <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Процент сбора</div>
+                  <div className="text-3xl font-bold text-emerald-600">
+                    {(() => {
+                      const totalStarted = filteredComparisonData.started.reduce((sum: number, day: any) => sum + day.count, 0);
+                      const totalClaimed = filteredComparisonData.claimed.reduce((sum: number, day: any) => sum + day.count, 0);
+                      return totalStarted > 0 ? ((totalClaimed / totalStarted) * 100).toFixed(1) : '0';
+                    })()}%
+                  </div>
+                </div>
+              </div>
+            )}
+            
             {/* Большой график */}
-            <div className="h-96">
-              <Line
-                data={{
-                  labels: eventsData.events['mining_started'].map((d: any) => d.date),
-                  datasets: [
-                    {
-                      label: 'Майнинг запущен',
-                      data: eventsData.events['mining_started'].map((d: any) => d.count),
-                      borderColor: '#f97316',
-                      backgroundColor: 'rgba(249, 115, 22, 0.1)',
-                      borderWidth: 3,
-                      fill: true,
-                      tension: 0.4,
-                      pointBackgroundColor: '#f97316',
-                      pointBorderColor: isDark ? '#ffffff' : '#ffffff',
-                      pointBorderWidth: 2,
-                      pointRadius: 6,
-                      pointHoverRadius: 8,
-                    },
-                    {
-                      label: 'Майнинг собран',
-                      data: eventsData.events['mining_claimed'].map((d: any) => d.count),
-                      borderColor: '#10b981',
-                      backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                      borderWidth: 3,
-                      fill: true,
-                      tension: 0.4,
-                      pointBackgroundColor: '#10b981',
-                      pointBorderColor: isDark ? '#ffffff' : '#ffffff',
-                      pointBorderWidth: 2,
-                      pointRadius: 6,
-                      pointHoverRadius: 8,
-                    }
-                  ]
-                }}
+            {filteredComparisonData && (
+              <div className="h-96">
+                <Line
+                  data={{
+                    labels: filteredComparisonData.dates,
+                    datasets: [
+                      {
+                        label: 'Майнинг запущен',
+                        data: filteredComparisonData.started.map((d: any) => d.count),
+                        borderColor: '#f97316',
+                        backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#f97316',
+                        pointBorderColor: isDark ? '#ffffff' : '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 6,
+                        pointHoverRadius: 8,
+                      },
+                      {
+                        label: 'Майнинг собран',
+                        data: filteredComparisonData.claimed.map((d: any) => d.count),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#10b981',
+                        pointBorderColor: isDark ? '#ffffff' : '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 6,
+                        pointHoverRadius: 8,
+                      }
+                    ]
+                  }}
                 options={{
                   responsive: true,
                   maintainAspectRatio: false,
