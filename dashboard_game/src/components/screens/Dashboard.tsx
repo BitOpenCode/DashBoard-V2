@@ -48,7 +48,6 @@ const EventIcon: React.FC<{ name: string; className?: string; color?: string }> 
   };
   return <>{iconMap[name] || <Zap className={className} style={{ color }} />}</>;
 };
-import { fetchDashboardStats, type DashboardStats } from '../../utils/n8n';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -100,9 +99,6 @@ const formatFullNumber = (value: number | string): string => {
 
 const Dashboard: React.FC = () => {
   const { isDark } = useTheme();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState<boolean>(false); // Установлено в false, так как dashboard-stats не используется
-  const [error, setError] = useState<string | null>(null);
   const [usersData, setUsersData] = useState<{
     totalUsers: number;
     usersLast24h: any[];
@@ -465,22 +461,6 @@ const Dashboard: React.FC = () => {
 
   // Refs для категорий событий
   const categoryRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
-
-  const load = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchDashboardStats();
-      setStats(data);
-    } catch (e) {
-      // Игнорируем ошибки загрузки dashboard-stats, так как этот webhook может быть неактивен
-      console.warn('⚠️ Не удалось загрузить dashboard-stats (webhook может быть неактивен):', e);
-      // Не устанавливаем ошибку, чтобы не показывать её пользователю
-      // setError(e instanceof Error ? e.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const loadUsersData = async () => {
     setUsersLoading(true);
@@ -4132,11 +4112,6 @@ const Dashboard: React.FC = () => {
     return data;
   }, [selectedEventModal, modalTimeFilter]);
 
-  useEffect(() => {
-    // Автоматическая загрузка dashboard-stats отключена, так как webhook может быть неактивен
-    // load();
-    // Автоматическое обновление отключено - данные статичны
-  }, []);
 
   // Блокируем скролл основного экрана при открытом модальном окне пользователей уровня
   useEffect(() => {
@@ -4365,29 +4340,7 @@ const Dashboard: React.FC = () => {
     );
   };
 
-  if (loading) {
-    return (
-      <div className="max-w-md mx-auto px-4 py-6 md:max-w-4xl">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>Загрузка данных дашборда...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="max-w-md mx-auto px-4 py-6 md:max-w-4xl">
-        <div className={`p-4 rounded-xl ${isDark ? 'bg-red-900/30 border border-red-700' : 'bg-red-50 border border-red-200'}`}>
-          <p className="text-red-600">Ошибка загрузки: {error}</p>
-          <button onClick={load} className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white">
-            <RefreshCw className="w-4 h-4" /> Повторить
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Удалено: loading и error больше не используются
 
   // Удалены захардкоженные карточки майнинга
 
@@ -4441,9 +4394,6 @@ const Dashboard: React.FC = () => {
     <div className="max-w-md mx-auto px-4 py-6 md:max-w-4xl">
       <div className="mb-6 text-center">
         <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-orange-500 to-orange-600 bg-clip-text text-transparent">ECOS BTC Mining Game</h1>
-        {stats && (
-        <p className={`text-xs mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Обновлено: {new Date(stats.updatedAtIso).toLocaleString('ru-RU')}</p>
-        )}
       </div>
 
       {/* Удалены захардкоженные карточки майнинга */}
