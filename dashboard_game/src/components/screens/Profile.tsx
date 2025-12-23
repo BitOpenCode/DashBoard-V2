@@ -3,14 +3,9 @@ import { User, Eye, EyeOff, Coins, Trophy, Calendar, Settings, LogOut, Crown, Us
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import ProfileSettings from './ProfileSettings';
-import EventsManagement from './EventsManagement';
-import NewsManagement from './NewsManagement';
 import UserMessages from './UserMessages';
-import CourseApplications from './CourseApplications';
 import UserManagement from './UserManagement';
-import ReferralScreen from './ReferralScreen';
 import Leaderboard from './Leaderboard';
-import Transactions from './Transactions';
 import Tasks from './Tasks';
 
 interface ProfileProps {
@@ -38,14 +33,9 @@ const Profile: React.FC<ProfileProps> = ({ onShowEmailConfirmation, onForceGoToL
   const [isRegistering, setIsRegistering] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
-  const [showEventsManagement, setShowEventsManagement] = useState(false);
-  const [showNewsManagement, setShowNewsManagement] = useState(false);
   const [showUserMessages, setShowUserMessages] = useState(false);
-  const [showCourseApplications, setShowCourseApplications] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
-  const [showReferral, setShowReferral] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [showTransactions, setShowTransactions] = useState(false);
   const [showTasks, setShowTasks] = useState(false);
   const [dashEcosCoinBalance, setDashEcosCoinBalance] = useState(0);
   const [leaderboardPosition, setLeaderboardPosition] = useState(0);
@@ -627,25 +617,6 @@ const Profile: React.FC<ProfileProps> = ({ onShowEmailConfirmation, onForceGoToL
     );
   }
 
-  // Если открыт экран управления событиями, показываем его
-  if (showEventsManagement) {
-    return (
-      <EventsManagement
-        onBack={() => setShowEventsManagement(false)}
-        isDark={isDark}
-      />
-    );
-  }
-
-  // Если открыт экран управления новостями, показываем его
-  if (showNewsManagement) {
-    return (
-      <NewsManagement
-        onBack={() => setShowNewsManagement(false)}
-        isDark={isDark}
-      />
-    );
-  }
 
   // Если открыт экран управления сообщениями, показываем его
   if (showUserMessages) {
@@ -658,15 +629,6 @@ const Profile: React.FC<ProfileProps> = ({ onShowEmailConfirmation, onForceGoToL
   }
 
   // Если открыт экран заявок на курс, показываем его
-  if (showCourseApplications) {
-    return (
-      <CourseApplications
-        onBack={() => setShowCourseApplications(false)}
-        isDark={isDark}
-      />
-    );
-  }
-
   // Если открыт экран управления пользователями, показываем его
   if (showUserManagement) {
     return (
@@ -677,31 +639,11 @@ const Profile: React.FC<ProfileProps> = ({ onShowEmailConfirmation, onForceGoToL
     );
   }
 
-  // Если открыт экран реферальной системы, показываем его
-  if (showReferral) {
-    return (
-      <ReferralScreen
-        onBack={() => setShowReferral(false)}
-        isDark={isDark}
-        user={user}
-      />
-    );
-  }
-
   // Если открыт экран таблицы лидеров, показываем его
   if (showLeaderboard) {
     return (
       <Leaderboard
         onBack={() => setShowLeaderboard(false)}
-      />
-    );
-  }
-
-  // Если открыт экран транзакций, показываем его
-  if (showTransactions) {
-    return (
-      <Transactions
-        onBack={() => setShowTransactions(false)}
       />
     );
   }
@@ -855,29 +797,6 @@ const Profile: React.FC<ProfileProps> = ({ onShowEmailConfirmation, onForceGoToL
         </div>
       )} */}
 
-      {/* Referral Section - только для обычных пользователей */}
-      {user?.role !== 'admin' && (
-        <div className={`rounded-2xl p-6 transition-colors duration-300 ${
-          isDark ? 'bg-gray-800' : 'bg-white'
-        }`}>
-          <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-gray-800'}`}>Реферальная программа</h3>
-          <div className="space-y-3">
-            <button 
-              onClick={() => setShowReferral(true)}
-              className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors duration-300 ${
-                isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
-              }`}
-            >
-              <div className="flex items-center space-x-3">
-                <Users className={`w-5 h-5 ${isDark ? 'text-pink-400' : 'text-pink-500'}`} />
-                <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Пригласить друзей</span>
-              </div>
-              <ChevronRight className={`w-4 h-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} />
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Settings */}
       <div className={`rounded-2xl p-6 transition-colors duration-300 ${
                 isDark ? 'bg-gray-800' : 'bg-white'
@@ -908,63 +827,6 @@ const Profile: React.FC<ProfileProps> = ({ onShowEmailConfirmation, onForceGoToL
             Административные функции
             </h3>
           <div className="space-y-4">
-            {/* Управление событиями */}
-            <button
-              onClick={() => setShowEventsManagement(true)}
-              className={`w-full p-4 rounded-xl border-2 border-dashed transition-all duration-300 ${
-                isDark 
-                  ? 'border-gray-600 hover:border-orange-500 hover:bg-gray-700/50' 
-                  : 'border-gray-300 hover:border-orange-500 hover:bg-gray-50'
-              } group`}
-            >
-              <div className="flex items-center space-x-3">
-                <div className={`w-10 h-10 rounded-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center group-hover:bg-orange-500 transition-colors`}>
-                  <Calendar className={`w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-500'} group-hover:text-white transition-colors`} />
-                </div>
-                <div className="flex-1 text-left">
-                  <h4 className={`font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>
-                    Управление событиями
-                  </h4>
-                  <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Добавление и редактирование событий
-                  </p>
-                </div>
-                <div className={`w-6 h-6 rounded-full ${isDark ? 'bg-gray-600' : 'bg-gray-300'} flex items-center justify-center group-hover:bg-orange-500 transition-colors`}>
-                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            </button>
-            
-            {/* Публикация новостей */}
-            <button
-              onClick={() => setShowNewsManagement(true)}
-              className={`w-full p-4 rounded-xl border-2 border-dashed transition-all duration-300 ${
-                isDark 
-                  ? 'border-gray-600 hover:border-orange-500 hover:bg-gray-700/50' 
-                  : 'border-gray-300 hover:border-orange-500 hover:bg-gray-50'
-              } group`}
-            >
-              <div className="flex items-center space-x-3">
-                <div className={`w-10 h-10 rounded-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center group-hover:bg-orange-500 transition-colors`}>
-                  <span className="text-lg">🔔</span>
-                </div>
-                <div className="flex-1 text-left">
-                  <h4 className={`font-semibold ${isDark ? 'text-white' : 'text-gray-800'}`}>
-                    Публикация новостей
-                  </h4>
-                  <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Добавление, удаление и редактирование новостей
-                  </p>
-                </div>
-                <div className={`w-6 h-6 rounded-full ${isDark ? 'bg-gray-600' : 'bg-gray-300'} flex items-center justify-center group-hover:bg-orange-500 transition-colors`}>
-                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            </button>
             
             {/* Управление пользователями */}
             <button

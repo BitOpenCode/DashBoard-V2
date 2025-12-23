@@ -5,7 +5,6 @@ import Home from './components/screens/Home';
 import Dashboard from './components/screens/Dashboard';
 import Profile from './components/screens/Profile';
 import UserManagement from './components/screens/UserManagement';
-import EventsManagement from './components/screens/EventsManagement';
 import UserMessages from './components/screens/UserMessages';
 import EmailConfirmation from './components/screens/EmailConfirmation';
 import PasswordReset from './components/screens/PasswordReset';
@@ -14,9 +13,9 @@ import { LOGO_PATH } from './utils/paths';
 
 function App() {
   const { isDark } = useTheme();
-  const [activeScreen, setActiveScreen] = useState<'home' | 'dashboard' | 'profile' | 'email-confirmation' | 'password-reset' | 'user-management' | 'events-management' | 'user-messages'>(() => {
+  const [activeScreen, setActiveScreen] = useState<'home' | 'dashboard' | 'profile' | 'email-confirmation' | 'password-reset' | 'user-management' | 'user-messages'>(() => {
     const savedScreen = localStorage.getItem('ecos_active_screen');
-    return (savedScreen as 'home' | 'dashboard' | 'profile' | 'email-confirmation' | 'password-reset' | 'user-management' | 'events-management' | 'user-messages') || 'dashboard';
+    return (savedScreen as 'home' | 'dashboard' | 'profile' | 'email-confirmation' | 'password-reset' | 'user-management' | 'user-messages') || 'dashboard';
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -99,9 +98,6 @@ function App() {
         break;
       case 'user-management':
         mainScreen = <UserManagement />;
-        break;
-      case 'events-management':
-        mainScreen = <EventsManagement />;
         break;
       case 'user-messages':
         mainScreen = <UserMessages />;
