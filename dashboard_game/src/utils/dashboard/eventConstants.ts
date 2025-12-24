@@ -80,3 +80,4 @@ export const eventCategories: { [key: string]: { icon: string; events: string[] 
 export const excludedEvents = ['person_created', 'starter_pack_granted', 'bonus_reward', 'referral_bonus_referee'];
 
 
+

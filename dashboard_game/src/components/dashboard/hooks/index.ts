@@ -17,5 +17,6 @@ export { useLevelUsers } from './useLevelUsers';
 export { useAllUsersData } from './useAllUsersData';
 export { useScrollLock } from './useScrollLock';
 export { useModals } from './useModals';
+export { useShareChart } from './useShareChart';
 export * from './types';
 

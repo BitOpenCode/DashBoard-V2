@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { Users, TrendingUp, Globe, Calendar } from 'lucide-react';
-import { Line, Doughnut } from 'react-chartjs-2';
+import { Users, TrendingUp, Globe, Calendar, Share2 } from 'lucide-react';
+import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { UsersData, TimeFilter } from '../hooks/types';
+import { useShareChart } from '../hooks/useShareChart';
 
 interface UsersSectionProps {
   usersData: UsersData;
@@ -21,6 +22,9 @@ export const UsersSection: React.FC<UsersSectionProps> = ({
   setTimeFilter,
 }) => {
   const { isDark } = useTheme();
+  const chartRef = useRef<HTMLDivElement>(null);
+  const { shareChart, isSharing } = useShareChart();
+  const [chartType, setChartType] = useState<'line' | 'bar'>('line');
 
   // Фильтрация данных по выбранному периоду
   const filteredData = useMemo(() => {
@@ -276,6 +280,82 @@ export const UsersSection: React.FC<UsersSectionProps> = ({
     return forecastData;
   }, [usersData, timeFilter]);
 
+  // Вычисление прироста в процентах по сравнению с предыдущим периодом
+  const growthStats = useMemo(() => {
+    if (!filteredData?.dailyCounts || filteredData.dailyCounts.length === 0) {
+      return { percentage: 0, currentPeriodTotal: 0, previousPeriodTotal: 0 };
+    }
+
+    // Сортируем исходные данные по дате
+    const sortedDays = [...usersData.dailyCounts].sort((a, b) => {
+      const [dayA, monthA, yearA] = a.date.split('.').map(Number);
+      const [dayB, monthB, yearB] = b.date.split('.').map(Number);
+      const dateA = Date.UTC(2000 + yearA, monthA - 1, dayA);
+      const dateB = Date.UTC(2000 + yearB, monthB - 1, dayB);
+      return dateA - dateB;
+    });
+
+    if (sortedDays.length === 0) {
+      return { percentage: 0, currentPeriodTotal: 0, previousPeriodTotal: 0 };
+    }
+
+    let currentPeriodTotal = 0;
+    let previousPeriodTotal = 0;
+    
+    if (timeFilter === 'all') {
+      // Для "all" сравниваем последние 7 дней с предыдущими 7 днями
+      if (sortedDays.length >= 14) {
+        const last7Days = sortedDays.slice(-7);
+        const previous7Days = sortedDays.slice(-14, -7);
+        currentPeriodTotal = last7Days.reduce((sum, day) => sum + day.count, 0);
+        previousPeriodTotal = previous7Days.reduce((sum, day) => sum + day.count, 0);
+      } else if (sortedDays.length >= 7) {
+        const last7Days = sortedDays.slice(-7);
+        currentPeriodTotal = last7Days.reduce((sum, day) => sum + day.count, 0);
+        previousPeriodTotal = 0;
+      }
+    } else if (timeFilter === '7') {
+      // Для недель - сравниваем последнюю неделю с предыдущей неделей
+      // filteredData.dailyCounts уже содержит недельные данные
+      if (filteredData.dailyCounts.length >= 2) {
+        const lastWeek = filteredData.dailyCounts[filteredData.dailyCounts.length - 1];
+        const previousWeek = filteredData.dailyCounts[filteredData.dailyCounts.length - 2];
+        currentPeriodTotal = lastWeek.count;
+        previousPeriodTotal = previousWeek.count;
+      } else if (filteredData.dailyCounts.length === 1) {
+        currentPeriodTotal = filteredData.dailyCounts[0].count;
+        previousPeriodTotal = 0;
+      }
+    } else if (timeFilter === '30') {
+      // Для месяцев - сравниваем последний месяц с предыдущим месяцем
+      // filteredData.dailyCounts уже содержит месячные данные
+      if (filteredData.dailyCounts.length >= 2) {
+        const lastMonth = filteredData.dailyCounts[filteredData.dailyCounts.length - 1];
+        const previousMonth = filteredData.dailyCounts[filteredData.dailyCounts.length - 2];
+        currentPeriodTotal = lastMonth.count;
+        previousPeriodTotal = previousMonth.count;
+      } else if (filteredData.dailyCounts.length === 1) {
+        currentPeriodTotal = filteredData.dailyCounts[0].count;
+        previousPeriodTotal = 0;
+      }
+    }
+
+    // Вычисляем процент прироста
+    let percentage = 0;
+    if (previousPeriodTotal > 0) {
+      percentage = ((currentPeriodTotal - previousPeriodTotal) / previousPeriodTotal) * 100;
+    } else if (currentPeriodTotal > 0 && previousPeriodTotal === 0) {
+      // Если предыдущего периода нет, но есть текущий - это новый период
+      percentage = 0; // Не показываем прирост, если нет данных для сравнения
+    }
+
+    return {
+      percentage: Math.round(percentage * 100) / 100, // Округляем до 2 знаков
+      currentPeriodTotal,
+      previousPeriodTotal,
+    };
+  }, [filteredData, usersData, timeFilter]);
+
   return (
     <div className="mb-6">
       <div className="flex items-center gap-3 mb-6">
@@ -452,6 +532,7 @@ export const UsersSection: React.FC<UsersSectionProps> = ({
               className={`p-6 rounded-xl shadow-lg ${
                 isDark ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
               }`}
+              ref={chartRef}
             >
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -461,134 +542,268 @@ export const UsersSection: React.FC<UsersSectionProps> = ({
                   </h3>
                 </div>
 
-                {/* Filter buttons */}
-                <div className="flex gap-2">
-                  {[
-                    { key: 'all', label: '1D' },
-                    { key: '7', label: '1W' },
-                    { key: '30', label: '1M' },
-                  ].map(({ key, label }) => (
-                    <button
-                      key={key}
-                      onClick={() => setTimeFilter(key as TimeFilter)}
-                      className={
-                        timeFilter === key ? 'neu-btn-filter-active' : 'neu-btn-filter'
+                <div className="flex items-center gap-2">
+                  {/* Filter buttons */}
+                  <div className="flex gap-2">
+                    {[
+                      { key: 'all', label: '1D' },
+                      { key: '7', label: '1W' },
+                      { key: '30', label: '1M' },
+                    ].map(({ key, label }) => (
+                      <button
+                        key={key}
+                        onClick={() => setTimeFilter(key as TimeFilter)}
+                        className={
+                          timeFilter === key ? 'neu-btn-filter-active' : 'neu-btn-filter'
+                        }
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Chart Type Toggle */}
+                  <button
+                    onClick={() => setChartType(chartType === 'line' ? 'bar' : 'line')}
+                    className="neu-btn-filter"
+                    title={chartType === 'line' ? 'Переключить на столбчатый график' : 'Переключить на линейный график'}
+                  >
+                    {chartType === 'line' ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                      </svg>
+                    )}
+                  </button>
+
+                  {/* Share button */}
+                  <button
+                    onClick={() => {
+                      // Убеждаемся, что growthData передается как массив
+                      let growthDataArray = filteredData?.dailyCounts || [];
+                      
+                      // Ограничиваем количество данных для caption (лимит Telegram - 1024 символа)
+                      // Для "all" берем только последние 30 дней, чтобы caption не был слишком длинным
+                      if (timeFilter === 'all' && growthDataArray.length > 30) {
+                        growthDataArray = growthDataArray.slice(-30);
                       }
-                    >
-                      {label}
-                    </button>
-                  ))}
+                      // Для "7" и "30" оставляем все данные (их обычно немного)
+                      
+                      shareChart({
+                        chartRef,
+                        chartTitle: 'График прироста пользователей',
+                        chartType: chartType,
+                        section: 'users',
+                        timeFilter,
+                        totalUsers: usersData.totalUsers,
+                        growthData: growthDataArray,
+                        currentDate: new Date().toLocaleDateString('ru-RU'),
+                      });
+                    }}
+                    disabled={isSharing}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                      isDark
+                        ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                    } ${isSharing ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'}`}
+                    title="Поделиться графиком в Telegram"
+                  >
+                    <Share2 className={`w-4 h-4 ${isSharing ? 'animate-spin' : ''}`} />
+                    <span className="text-sm font-medium">
+                      {isSharing ? 'Отправка...' : 'Share'}
+                    </span>
+                  </button>
                 </div>
               </div>
 
               {/* График */}
               <div className="h-80">
-                <Line
-                  data={{
-                    labels: [
-                      ...(filteredData?.dailyCounts.map((day) => day.date) || []),
-                      ...(forecast?.map((day) => day.date) || []),
-                    ],
-                    datasets: [
-                      {
-                        label: 'Регистрации',
-                        data: filteredData?.dailyCounts.map((day) => day.count) || [],
-                        borderColor: isDark ? '#f97316' : '#ea580c',
-                        backgroundColor: isDark ? 'rgba(249, 115, 22, 0.1)' : 'rgba(249, 115, 22, 0.05)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        pointBackgroundColor: isDark ? '#f97316' : '#ea580c',
-                        pointBorderColor: isDark ? '#ffffff' : '#ffffff',
-                        pointBorderWidth: 2,
-                        pointRadius: 6,
-                        pointHoverRadius: 8,
-                      },
-                      // Добавляем прогноз
-                      ...(forecast
-                        ? [
-                            {
-                              label: 'Прогноз',
-                              data: [
-                                ...(filteredData?.dailyCounts.map(() => null) || []),
-                                ...forecast.map((day) => day.count),
-                              ],
-                              borderColor: isDark ? '#8b5cf6' : '#7c3aed',
-                              backgroundColor: 'transparent',
-                              borderWidth: 2,
-                              borderDash: [5, 5],
-                              tension: 0.4,
-                              pointBackgroundColor: isDark ? '#8b5cf6' : '#7c3aed',
-                              pointBorderColor: isDark ? '#ffffff' : '#ffffff',
-                              pointBorderWidth: 2,
-                              pointRadius: 4,
-                              pointHoverRadius: 6,
+                {chartType === 'line' ? (
+                  <Line
+                    data={{
+                      labels: [
+                        ...(filteredData?.dailyCounts.map((day) => day.date) || []),
+                        ...(forecast?.map((day) => day.date) || []),
+                      ],
+                      datasets: [
+                        {
+                          label: 'Регистрации',
+                          data: filteredData?.dailyCounts.map((day) => day.count) || [],
+                          borderColor: isDark ? '#f97316' : '#ea580c',
+                          backgroundColor: isDark ? 'rgba(249, 115, 22, 0.1)' : 'rgba(249, 115, 22, 0.05)',
+                          borderWidth: 3,
+                          fill: true,
+                          tension: 0.4,
+                          pointBackgroundColor: isDark ? '#f97316' : '#ea580c',
+                          pointBorderColor: isDark ? '#ffffff' : '#ffffff',
+                          pointBorderWidth: 2,
+                          pointRadius: 6,
+                          pointHoverRadius: 8,
+                        },
+                        // Добавляем прогноз
+                        ...(forecast
+                          ? [
+                              {
+                                label: 'Прогноз',
+                                data: [
+                                  ...(filteredData?.dailyCounts.map(() => null) || []),
+                                  ...forecast.map((day) => day.count),
+                                ],
+                                borderColor: isDark ? '#8b5cf6' : '#7c3aed',
+                                backgroundColor: 'transparent',
+                                borderWidth: 2,
+                                borderDash: [5, 5],
+                                tension: 0.4,
+                                pointBackgroundColor: isDark ? '#8b5cf6' : '#7c3aed',
+                                pointBorderColor: isDark ? '#ffffff' : '#ffffff',
+                                pointBorderWidth: 2,
+                                pointRadius: 4,
+                                pointHoverRadius: 6,
+                              },
+                            ]
+                          : []),
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          display: false,
+                        },
+                        tooltip: {
+                          backgroundColor: isDark ? '#374151' : '#ffffff',
+                          titleColor: isDark ? '#ffffff' : '#000000',
+                          bodyColor: isDark ? '#ffffff' : '#000000',
+                          borderColor: isDark ? '#4b5563' : '#e5e7eb',
+                          borderWidth: 1,
+                          cornerRadius: 8,
+                          displayColors: false,
+                          callbacks: {
+                            title: function (context) {
+                              return `📅 ${context[0].label}`;
                             },
-                          ]
-                        : []),
-                    ],
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        display: false,
-                      },
-                      tooltip: {
-                        backgroundColor: isDark ? '#374151' : '#ffffff',
-                        titleColor: isDark ? '#ffffff' : '#000000',
-                        bodyColor: isDark ? '#ffffff' : '#000000',
-                        borderColor: isDark ? '#4b5563' : '#e5e7eb',
-                        borderWidth: 1,
-                        cornerRadius: 8,
-                        displayColors: false,
-                        callbacks: {
-                          title: function (context) {
-                            return `📅 ${context[0].label}`;
-                          },
-                          label: function (context) {
-                            return `👥 ${context.parsed.y} новых пользователей`;
+                            label: function (context) {
+                              return `👥 ${context.parsed.y} новых пользователей`;
+                            },
                           },
                         },
                       },
-                    },
-                    scales: {
-                      x: {
-                        grid: {
-                          color: isDark ? '#374151' : '#f3f4f6',
-                          drawBorder: false,
+                      scales: {
+                        x: {
+                          grid: {
+                            color: isDark ? '#374151' : '#f3f4f6',
+                            drawBorder: false,
+                          },
+                          ticks: {
+                            color: isDark ? '#9ca3af' : '#6b7280',
+                            font: {
+                              size: 12,
+                            },
+                          },
                         },
-                        ticks: {
-                          color: isDark ? '#9ca3af' : '#6b7280',
-                          font: {
-                            size: 12,
+                        y: {
+                          beginAtZero: true,
+                          grid: {
+                            color: isDark ? '#374151' : '#f3f4f6',
+                            drawBorder: false,
+                          },
+                          ticks: {
+                            color: isDark ? '#9ca3af' : '#6b7280',
+                            font: {
+                              size: 12,
+                            },
+                            callback: function (value) {
+                              return Number(value).toLocaleString('ru-RU');
+                            },
                           },
                         },
                       },
-                      y: {
-                        beginAtZero: true,
-                        grid: {
-                          color: isDark ? '#374151' : '#f3f4f6',
-                          drawBorder: false,
+                      interaction: {
+                        intersect: false,
+                        mode: 'index',
+                      },
+                    }}
+                  />
+                ) : (
+                  <Bar
+                    data={{
+                      labels: filteredData?.dailyCounts.map((day) => day.date) || [],
+                      datasets: [
+                        {
+                          label: 'Регистрации',
+                          data: filteredData?.dailyCounts.map((day) => day.count) || [],
+                          backgroundColor: isDark ? '#f97316' : '#ea580c',
+                          borderColor: isDark ? '#f97316' : '#ea580c',
+                          borderWidth: 1,
                         },
-                        ticks: {
-                          color: isDark ? '#9ca3af' : '#6b7280',
-                          font: {
-                            size: 12,
-                          },
-                          callback: function (value) {
-                            return Number(value).toLocaleString('ru-RU');
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          display: false,
+                        },
+                        tooltip: {
+                          backgroundColor: isDark ? '#374151' : '#ffffff',
+                          titleColor: isDark ? '#ffffff' : '#000000',
+                          bodyColor: isDark ? '#ffffff' : '#000000',
+                          borderColor: isDark ? '#4b5563' : '#e5e7eb',
+                          borderWidth: 1,
+                          cornerRadius: 8,
+                          displayColors: false,
+                          callbacks: {
+                            title: function (context) {
+                              return `📅 ${context[0].label}`;
+                            },
+                            label: function (context) {
+                              return `👥 ${context.parsed.y} новых пользователей`;
+                            },
                           },
                         },
                       },
-                    },
-                    interaction: {
-                      intersect: false,
-                      mode: 'index',
-                    },
-                  }}
-                />
+                      scales: {
+                        x: {
+                          grid: {
+                            color: isDark ? '#374151' : '#f3f4f6',
+                            drawBorder: false,
+                          },
+                          ticks: {
+                            color: isDark ? '#9ca3af' : '#6b7280',
+                            font: {
+                              size: 12,
+                            },
+                          },
+                        },
+                        y: {
+                          beginAtZero: true,
+                          grid: {
+                            color: isDark ? '#374151' : '#f3f4f6',
+                            drawBorder: false,
+                          },
+                          ticks: {
+                            color: isDark ? '#9ca3af' : '#6b7280',
+                            font: {
+                              size: 12,
+                            },
+                            callback: function (value) {
+                              return Number(value).toLocaleString('ru-RU');
+                            },
+                          },
+                        },
+                      },
+                      interaction: {
+                        intersect: false,
+                        mode: 'index',
+                      },
+                    }}
+                  />
+                )}
               </div>
             </div>
           )}

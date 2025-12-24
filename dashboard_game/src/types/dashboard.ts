@@ -4,3 +4,4 @@ export interface EventModalData {
   eventInfo: { title: string; icon: string; color: string };
 }
 
+
