@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { Toaster } from 'react-hot-toast';
 import { useTheme } from './contexts/ThemeContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import Navigation from './components/Navigation';
 import Home from './components/screens/Home';
 import Dashboard from './components/screens/Dashboard';
@@ -156,59 +158,96 @@ function App() {
   }
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${
-      isDark 
-        ? 'bg-[#1a1a1a]' 
-        : 'bg-gray-100'
-    }`}>
-      {/* Header */}
-      <header className={`sticky top-0 z-40 transition-colors duration-300 ${
+    <ErrorBoundary>
+      <div className={`min-h-screen transition-colors duration-300 ${
         isDark 
-          ? 'neu-header' 
-          : 'bg-white shadow-lg'
+          ? 'bg-[#1a1a1a]' 
+          : 'bg-gray-100'
       }`}>
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className={`w-12 h-12 rounded-xl overflow-hidden ${
-                isDark ? 'neu-card-sm' : 'shadow-lg'
-              }`}>
-                <img 
-                  src={LOGO_PATH} 
-                  alt="ECOS Logo" 
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div>
-                <h1 className={`text-xl font-bold tracking-wider ${isDark ? 'text-white' : 'text-gray-800'}`}>
-                ECOS
-              </h1>
-                <p className={`text-xs font-mono ${isDark ? 'text-neutral-500' : 'text-gray-500'}`}>
-                  {isDark ? 'TACTICAL DASHBOARD' : 'Mining Game'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              {isDark && (
-            <div className="flex items-center space-x-2">
-                  <div className="neu-status neu-status-active"></div>
-                  <span className="text-xs text-neutral-400 font-mono">ONLINE</span>
+        {/* Header */}
+        <header className={`sticky top-0 z-40 transition-colors duration-300 ${
+          isDark 
+            ? 'neu-header' 
+            : 'bg-white shadow-lg'
+        }`}>
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className={`w-12 h-12 rounded-xl overflow-hidden ${
+                  isDark ? 'neu-card-sm' : 'shadow-lg'
+                }`}>
+                  <img 
+                    src={LOGO_PATH} 
+                    alt="ECOS Logo" 
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-              )}
-              <ThemeToggle />
+                <div>
+                  <h1 className={`text-xl font-bold tracking-wider ${isDark ? 'text-white' : 'text-gray-800'}`}>
+                  ECOS
+                </h1>
+                  <p className={`text-xs font-mono ${isDark ? 'text-neutral-500' : 'text-gray-500'}`}>
+                    {isDark ? 'TACTICAL DASHBOARD' : 'Mining Game'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-4">
+                {isDark && (
+              <div className="flex items-center space-x-2">
+                    <div className="neu-status neu-status-active"></div>
+                    <span className="text-xs text-neutral-400 font-mono">ONLINE</span>
+                  </div>
+                )}
+                <ThemeToggle />
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Main Content */}
-      <main className="pb-24 md:pb-8">
-        {renderScreen()}
-      </main>
+        {/* Main Content */}
+        <main className="pb-24 md:pb-8">
+          {renderScreen()}
+        </main>
 
-      {/* Bottom Navigation */}
-      <Navigation activeScreen={activeScreen} onScreenChange={setActiveScreen} />
-    </div>
+        {/* Bottom Navigation */}
+        <Navigation activeScreen={activeScreen} onScreenChange={setActiveScreen} />
+
+        {/* Toast Notifications */}
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: isDark ? '#1f2937' : '#ffffff',
+              color: isDark ? '#f3f4f6' : '#111827',
+              border: isDark ? '1px solid #374151' : '1px solid #e5e7eb',
+              borderRadius: '0.5rem',
+              boxShadow: isDark 
+                ? '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2)' 
+                : '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10b981',
+                secondary: '#ffffff',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#ef4444',
+                secondary: '#ffffff',
+              },
+            },
+            loading: {
+              iconTheme: {
+                primary: '#3b82f6',
+                secondary: '#ffffff',
+              },
+            },
+          }}
+        />
+      </div>
+    </ErrorBoundary>
   );
 }
 

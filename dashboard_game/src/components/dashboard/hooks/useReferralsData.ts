@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { ReferralsData } from './types';
 
 /**
@@ -94,7 +95,7 @@ export const useReferralsData = () => {
       
     } catch (e: any) {
       console.error('❌ Ошибка при загрузке данных рефералов:', e);
-      alert('Ошибка загрузки данных рефералов: ' + (e.message || 'Неизвестная ошибка'));
+      toast.error('Ошибка загрузки данных рефералов: ' + (e.message || 'Неизвестная ошибка'));
     } finally {
       setLoading(false);
     }

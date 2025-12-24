@@ -1,22 +1,26 @@
-import { EventsData } from '../../components/dashboard/hooks/types';
+export interface EventModalData {
+  date: string;
+  count: number;
+}
+
+export type TimeFilter = 'all' | '7' | '30';
 
 /**
- * Утилита для фильтрации данных событий по времени
+ * Фильтрует данные события по выбранному периоду времени
  */
-
-const formatDateDDMMYY = (date: Date) => {
-  const dd = String(date.getUTCDate()).padStart(2, '0');
-  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const yy = String(date.getUTCFullYear()).slice(-2);
-  return `${dd}.${mm}.${yy}`;
-};
-
-/**
- * Агрегирует данные по дням/неделям/месяцам
- */
-const aggregateData = (data: { date: string; count: number }[], filter: 'all' | '7' | '30') => {
+export const filterEventModalData = (
+  data: EventModalData[],
+  filter: TimeFilter
+): EventModalData[] => {
   if (!data || data.length === 0) return [];
-  
+
+  const formatDateDDMMYY = (date: Date) => {
+    const dd = String(date.getUTCDate()).padStart(2, '0');
+    const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const yy = String(date.getUTCFullYear()).slice(-2);
+    return `${dd}.${mm}.${yy}`;
+  };
+
   if (filter === 'all') {
     return data;
   } else if (filter === '7') {
@@ -59,9 +63,9 @@ const aggregateData = (data: { date: string; count: number }[], filter: 'all' | 
     
     return countsByWeek
       .sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime())
-      .map(data => ({
-        date: `${formatDateDDMMYY(data.weekStart)}–${formatDateDDMMYY(data.weekEnd)}`,
-        count: data.count
+      .map(d => ({
+        date: `${formatDateDDMMYY(d.weekStart)}–${formatDateDDMMYY(d.weekEnd)}`,
+        count: d.count
       }));
   } else if (filter === '30') {
     // Группировка по месяцам
@@ -90,65 +94,4 @@ const aggregateData = (data: { date: string; count: number }[], filter: 'all' | 
   
   return data;
 };
-
-/**
- * Фильтрует данные событий по времени
- */
-export const filterEventsData = (eventsData: EventsData | null, timeFilter: 'all' | '7' | '30') => {
-  if (!eventsData) return null;
-
-  // Агрегируем totalByDay
-  const filteredTotalByDay = aggregateData(eventsData.totalByDay, timeFilter);
-
-  // Агрегируем каждый event
-  const filteredEvents: { [key: string]: { date: string; count: number }[] } = {};
-  Object.keys(eventsData.events).forEach(eventName => {
-    filteredEvents[eventName] = aggregateData(eventsData.events[eventName], timeFilter);
-  });
-
-  return {
-    ...eventsData,
-    totalByDay: filteredTotalByDay,
-    events: filteredEvents
-  };
-};
-
-/**
- * Фильтрует данные для графика корреляции
- */
-export const filterCorrelationData = (eventsData: EventsData | null, timeFilter: 'all' | '7' | '30') => {
-  if (!eventsData) return null;
-
-  // Агрегируем каждый event по фильтру времени
-  const filteredEvents: { [key: string]: { date: string; count: number }[] } = {};
-  Object.keys(eventsData.events).forEach(eventName => {
-    filteredEvents[eventName] = aggregateData(eventsData.events[eventName], timeFilter);
-  });
-
-  // Получаем общие даты для всех событий
-  const allDates = new Set<string>();
-  Object.values(filteredEvents).forEach(eventData => {
-    eventData.forEach(day => allDates.add(day.date));
-  });
-  const sortedDates = Array.from(allDates).sort((a, b) => {
-    const parseDate = (dateStr: string) => {
-      if (dateStr.includes('–')) {
-        const [start] = dateStr.split('–');
-        const [dd, mm, yy] = start.split('.');
-        return new Date(2000 + parseInt(yy), parseInt(mm) - 1, parseInt(dd)).getTime();
-      } else if (dateStr.includes('.')) {
-        const [mm, yy] = dateStr.split('.');
-        return new Date(2000 + parseInt(yy), parseInt(mm) - 1, 1).getTime();
-      }
-      return 0;
-    };
-    return parseDate(a) - parseDate(b);
-  });
-
-  return {
-    dates: sortedDates,
-    events: filteredEvents
-  };
-};
-
 

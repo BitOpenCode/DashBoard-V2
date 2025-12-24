@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { UsersData, TimeFilter } from './types';
 
 /**
@@ -111,7 +112,7 @@ export const useUsersData = () => {
         }
       }
       
-      alert('Ошибка загрузки данных пользователей: ' + errorMessage);
+      toast.error('Ошибка загрузки данных пользователей: ' + errorMessage);
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { EventsData } from './types';
 
 /**
@@ -66,7 +67,7 @@ export const useEventsData = () => {
         errorMessage = e.message;
       }
       
-      alert('Ошибка загрузки данных событий: ' + errorMessage);
+      toast.error('Ошибка загрузки данных событий: ' + errorMessage);
     } finally {
       setLoading(false);
     }
@@ -81,4 +82,5 @@ export const useEventsData = () => {
     setEventsData,
   };
 };
+
 

@@ -140,3 +140,4 @@ export interface FunnelData {
   total_users: number;
 }
 
+

@@ -16,11 +16,16 @@ export default defineConfig({
     }),
   ],
   server: {
-    port: 5173,
-    host: true,
+    port: 5175,
+    host: 'localhost',
     strictPort: false,
     proxy: {
       '/webhook': {
+        target: 'https://n8n-p.blc.am',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/webhook-test': {
         target: 'https://n8n-p.blc.am',
         changeOrigin: true,
         secure: false,

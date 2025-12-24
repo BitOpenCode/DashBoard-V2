@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { WalletsData } from './types';
 
 /**
@@ -63,8 +64,8 @@ export const useWalletsData = () => {
         errorMessage = e.message;
       }
       
-      const fullErrorMessage = `Ошибка загрузки данных кошельков: ${errorMessage}\n\nУбедитесь, что webhook "users-wallets" активен в n8n.`;
-      alert(fullErrorMessage);
+      const fullErrorMessage = `Ошибка загрузки данных кошельков: ${errorMessage}. Убедитесь, что webhook "users-wallets" активен в n8n.`;
+      toast.error(fullErrorMessage);
     } finally {
       setLoading(false);
     }
@@ -77,4 +78,5 @@ export const useWalletsData = () => {
     setWalletsData, // Для возможности сброса данных извне
   };
 };
+
 

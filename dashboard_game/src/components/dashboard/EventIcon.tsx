@@ -60,3 +60,4 @@ export const EventIcon: React.FC<EventIconProps> = ({
   return <>{iconMap[name] || <Zap className={className} style={{ color }} />}</>;
 };
 
+

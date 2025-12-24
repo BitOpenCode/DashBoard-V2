@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Users } from 'lucide-react';
 import { WalletsData } from '../hooks/types';
@@ -37,8 +38,12 @@ export const WalletsSection: React.FC<WalletsSectionProps> = ({
         {/* Карточки статистики кошельков - Apple Style */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* Всего пользователей */}
-          <div
-            className={`group relative overflow-hidden transition-all duration-300 hover:scale-[1.02] ${
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+            whileHover={{ scale: 1.02, y: -4 }}
+            className={`group relative overflow-hidden ${
               isDark
                 ? 'bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/50'
                 : 'bg-white/80 backdrop-blur-xl border border-gray-200/50 shadow-sm'
@@ -65,11 +70,15 @@ export const WalletsSection: React.FC<WalletsSectionProps> = ({
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
 
           {/* С кошельком */}
-          <div
-            className={`group relative overflow-hidden transition-all duration-300 hover:scale-[1.02] ${
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+            whileHover={{ scale: 1.02, y: -4 }}
+            className={`group relative overflow-hidden ${
               isDark
                 ? 'bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/50'
                 : 'bg-white/80 backdrop-blur-xl border border-gray-200/50 shadow-sm'
@@ -99,11 +108,15 @@ export const WalletsSection: React.FC<WalletsSectionProps> = ({
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
 
           {/* Без кошелька */}
-          <div
-            className={`group relative overflow-hidden transition-all duration-300 hover:scale-[1.02] ${
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3, delay: 0.3 }}
+            whileHover={{ scale: 1.02, y: -4 }}
+            className={`group relative overflow-hidden ${
               isDark
                 ? 'bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/50'
                 : 'bg-white/80 backdrop-blur-xl border border-gray-200/50 shadow-sm'
@@ -133,12 +146,14 @@ export const WalletsSection: React.FC<WalletsSectionProps> = ({
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
 
         {/* Кнопка для просмотра пользователей с кошельками */}
         <div className="flex justify-center mt-6">
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={onLoadWalletUsers}
             disabled={walletUsersLoading}
             className={`group relative px-6 py-3 rounded-xl font-medium transition-all flex items-center gap-3 text-sm ${
@@ -175,7 +190,7 @@ export const WalletsSection: React.FC<WalletsSectionProps> = ({
                 </svg>
               </>
             )}
-          </button>
+          </motion.button>
         </div>
       </div>
     </div>

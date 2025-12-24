@@ -29,3 +29,4 @@ export const formatFullNumber = (value: number | string): string => {
   return num.toFixed(8).replace(/\.?0+$/, '');
 };
 
+
